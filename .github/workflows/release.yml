@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: publicar release
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configurar .NET 10
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Gerar artefatos
+        shell: powershell
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: .\scripts\build-release.ps1 -Version $env:RELEASE_TAG -OutputDirectory .\artifacts\release
+
+      - name: Criar ou atualizar GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(
+            ".\artifacts\release\FH6-Open-Assist-Portable.zip",
+            ".\artifacts\release\FH6-Open-Assist-Setup.exe"
+          )
+
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME @assets --clobber --repo $env:GITHUB_REPOSITORY
+          }
+          else {
+            gh release create $env:GITHUB_REF_NAME @assets --verify-tag --generate-notes --title $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível publicar os artefatos na GitHub Release."
+          }

@@ -1,0 +1,78 @@
+name: Relatar um problema
+description: Informe uma falha reproduzível em um dos BOTs.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a melhorar o FH6 Open Assist. Remova dados pessoais dos logs e imagens antes de enviar.
+  - type: dropdown
+    id: bot
+    attributes:
+      label: BOT
+      options:
+        - Skill Points
+        - Farm de CR
+        - WheelSpin Mad Mike
+        - Interface ou inicialização
+        - Outro
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Modo de execução
+      options:
+        - Primeiro plano
+        - Segundo plano (experimental)
+        - Não se aplica
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão
+      description: Exemplo: v0.1.0.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que aconteceu?
+      description: Explique onde o fluxo parou ou tomou uma decisão incorreta.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Como reproduzir
+      description: Informe a tela inicial, o carro, as configurações e a sequência que levou ao erro.
+      placeholder: |
+        1. Iniciei na rua...
+        2. Selecionei Skill Points...
+        3. Pressionei F8...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log relevante
+      description: Cole apenas o trecho necessário e remova dados pessoais.
+      render: text
+  - type: textarea
+    id: additional
+    attributes:
+      label: Imagens ou contexto adicional
+      description: Arraste imagens de diagnóstico já revisadas para remover informações pessoais.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Verifiquei que não existe uma issue aberta sobre o mesmo problema.
+          required: true
+        - label: Removi informações pessoais, credenciais e tokens do conteúdo enviado.
+          required: true

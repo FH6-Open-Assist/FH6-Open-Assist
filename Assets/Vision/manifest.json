@@ -1,0 +1,24 @@
+{
+  "profile": "pt-BR",
+  "notes": "Referências herdadas do protótipo Python. OCR é o detector principal; estas imagens ficam disponíveis para calibração e fallback.",
+  "defaultThreshold": 0.60,
+  "thresholds": {
+    "cars_tab": 0.78,
+    "dealership_plain": 0.82,
+    "dealership_hover": 0.82,
+    "enter_car_plain": 0.78,
+    "enter_car_hover": 0.78,
+    "mastery_plain": 0.78,
+    "mastery_hover": 0.78,
+    "mazda_plain": 0.82,
+    "mazda_hover": 0.82,
+    "my_cars_plain": 0.78,
+    "my_cars_hover": 0.78,
+    "presentation_controls": 0.78,
+    "remove_plain": 0.78,
+    "remove_hover": 0.78,
+    "upgrade_plain": 0.78,
+    "upgrade_hover": 0.78,
+    "yes_plain": 0.78
+  }
+}
