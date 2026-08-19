@@ -1,0 +1,79 @@
+<Window x:Class="ForzaFarm.InstructionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Instruções — FH6 Open Assist"
+        Width="720"
+        Height="650"
+        MinWidth="620"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource TextBrush}">
+    <Window.Resources>
+        <Style x:Key="InstructionCardStyle" TargetType="Border">
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="#343B46" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock FontSize="28" FontWeight="Bold" Text="Antes de ativar" />
+            <TextBlock Margin="0,5,0,0"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       Text="Prepare o jogo conforme o BOT escolhido. Depois, clique em Ativar BOT e use F8." />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource InstructionCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="19" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                   Text="1 - Skill Points" />
+                        <TextBlock Margin="0,10,0,0" TextWrapping="Wrap"
+                                   Text="• Selecione o Subaru Impreza 22B-STI Version (de preferência, com a árvore de habilidades desbloqueada).&#10;• Ative todas as assistências.&#10;• Vá para a rua. Não ative este BOT dentro da garagem." />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource InstructionCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="19" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                   Text="2 - CR Glitch" />
+                        <TextBlock Margin="0,10,0,0" TextWrapping="Wrap"
+                                   Text="• Selecione o Nissan S-Cargo S1 800, sem tunagem.&#10;• Desative todas as assistências.&#10;• Defina a dificuldade como Imbatível.&#10;• Vá para a rua. Não ative este BOT dentro da garagem." />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource InstructionCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="19" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                   Text="3 - WheelSpin Mad Mike" />
+                        <TextBlock Margin="0,10,0,0" TextWrapping="Wrap"
+                                   Text="• É necessário ser VIP.&#10;• Tenha mais de 100.000 CR e mais de 30 SP.&#10;• Esteja na garagem, no menu Campanha." />
+                    </StackPanel>
+                </Border>
+
+                <Border Padding="16" Background="#2B1D20" BorderBrush="#D9364D" BorderThickness="1" CornerRadius="8">
+                    <TextBlock TextWrapping="Wrap"
+                               Text="Atalhos: F8 inicia ou pausa com liberação segura das teclas. F9 encerra e desativa o BOT." />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="4" HorizontalAlignment="Right" Click="CloseButton_Click" Content="Fechar" />
+    </Grid>
+</Window>

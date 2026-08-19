@@ -1,0 +1,21 @@
+{
+  "GameProcessName": "forzahorizon6",
+  "GameWindowTitle": "Forza Horizon 6",
+  "InputMode": "Foreground",
+  "PollIntervalMs": 350,
+  "ActionDelayMs": 450,
+  "ScreenTimeoutSeconds": 35,
+  "DiagnosticsDirectory": "diagnostics",
+  "Sp": {
+    "DirectTarget": 999,
+    "PointsPerRace": 10,
+    "ShareCode": "122697651",
+    "CinematicDelaySeconds": 18,
+    "WRefreshMs": 600
+  },
+  "Spins": {
+    "SkillPointsPerCar": 30,
+    "CreditsPerCar": 100000,
+    "PreserveCredits": 0
+  }
+}
