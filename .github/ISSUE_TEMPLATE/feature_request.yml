@@ -1,0 +1,32 @@
+name: Sugerir uma melhoria
+description: Proponha uma alteração de comportamento, interface ou novo fluxo.
+title: "[Melhoria]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Qual problema você quer resolver?
+      description: Explique a necessidade antes de descrever a solução.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solução sugerida
+      description: Descreva o comportamento esperado e as telas envolvidas.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Opcionalmente, explique outras abordagens avaliadas.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmação
+      options:
+        - label: Verifiquei que não existe uma solicitação aberta equivalente.
+          required: true

@@ -88,6 +88,10 @@ dotnet publish .\ForzaFarm.csproj -c Release -r win-x64 --self-contained true -o
 
 O painel **Log da execução** mostra cada etapa realizada. Em uma falha de reconhecimento, o programa informa o estado esperado e pode salvar uma imagem na pasta `diagnostics` ao lado do executável. Ao relatar um erro, envie o trecho do log e a imagem correspondente, sem incluir dados pessoais.
 
+## Contribuir
+
+Pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBUTING.md), abra uma [issue](https://github.com/FH6-Open-Assist/FH6-Open-Assist/issues) para problemas reproduzíveis ou use as [Discussões](https://github.com/FH6-Open-Assist/FH6-Open-Assist/discussions) para dúvidas e ideias.
+
 ### ☕ Apoie o FH6 Open Assist
 
 Se este projeto te ajudou, considere contribuir com um cafezinho. ❤️<br>

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Perguntas e ideias
+    url: https://github.com/FH6-Open-Assist/FH6-Open-Assist/discussions
+    about: Use as Discussões para dúvidas de uso e ideias ainda não definidas.
+  - name: Relatar vulnerabilidade em privado
+    url: https://github.com/FH6-Open-Assist/FH6-Open-Assist/security/advisories/new
+    about: Não publique vulnerabilidades ou credenciais em uma issue pública.
