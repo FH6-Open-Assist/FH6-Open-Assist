@@ -1,14 +1,22 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Numerics;
+using System.Threading;
 using FH6OpenAssist.Core;
 using FH6OpenAssist.Vision;
 using FH6OpenAssist.Windows;
 using FH6OpenAssist.Workflows;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Streams;
 using Windows.Graphics;
 using Windows.UI.ViewManagement;
 
@@ -29,7 +37,22 @@ public sealed partial class MainWindow : Window
     private bool _usingMica;
     private bool _loaded;
     private bool _updatingControls;
+    private bool _isInitializingSelection;
+    private bool _reduceMotion;
+    private MacroKind _selectedMacro = MacroKind.FarmarSp;
+    private InputMode _selectedInputMode = InputMode.Foreground;
+    private static readonly Dictionary<string, ImageSource> GrayscaleImageCache = new();
+    private readonly Dictionary<MacroKind, BotCardVisuals> _botCards = new();
+    private CancellationTokenSource? _botAnimationCancellation;
     private MacroRunState _currentState = MacroRunState.Parado;
+
+    private sealed record BotCardVisuals(
+        MacroKind Kind,
+        RadioButton Button,
+        FrameworkElement ImageHost,
+        Image GrayImage,
+        Image ColorImage,
+        FrameworkElement Glint);
 
     private const string ViGEmOfficialUrl = "https://github.com/nefarius/ViGEmBus/releases/latest";
 
@@ -82,7 +105,7 @@ public sealed partial class MainWindow : Window
         Closed += MainWindow_Closed;
     }
 
-    private void MainContent_Loaded(object sender, RoutedEventArgs e)
+    private async void MainContent_Loaded(object sender, RoutedEventArgs e)
     {
         if (_loaded)
         {
@@ -90,14 +113,21 @@ public sealed partial class MainWindow : Window
         }
 
         _loaded = true;
+        _reduceMotion = !new UISettings().AnimationsEnabled;
+        await InitializeBotCardsAsync();
+        ApplyBotVisualState(_selectedMacro);
+
         _updatingControls = true;
+        _isInitializingSelection = true;
         SpMacro.IsChecked = true;
+        _coordinator.Select(_selectedMacro);
         ThemeComboBox.SelectedIndex = (int)_preferences.Theme;
         var backgroundAvailable = UpdateBackgroundInputStatus();
         if (_settings.InputMode == InputMode.BackgroundExperimental && !backgroundAvailable)
         {
             _settings.InputMode = InputMode.Foreground;
             _preferences.InputMode = InputMode.Foreground;
+            _selectedInputMode = InputMode.Foreground;
             _input.SetMode(InputMode.Foreground);
             SavePreferences();
             _logger.Warn("Preferência de segundo plano revertida para primeiro plano porque o ViGEm não respondeu.");
@@ -105,7 +135,9 @@ public sealed partial class MainWindow : Window
 
         ForegroundMode.IsChecked = _settings.InputMode == InputMode.Foreground;
         BackgroundMode.IsChecked = _settings.InputMode == InputMode.BackgroundExperimental;
+        _selectedInputMode = _settings.InputMode;
         _updatingControls = false;
+        _isInitializingSelection = false;
         ApplyInputModeDescription(_settings.InputMode);
         UpdateInputModeControlsAvailability();
         MainContent.ActualThemeChanged += MainContent_ActualThemeChanged;
@@ -152,13 +184,268 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(LogPanel, isNarrow ? 0 : 2);
     }
 
-    private void Macro_Checked(object sender, RoutedEventArgs e)
+    private async Task InitializeBotCardsAsync()
     {
+        if (_botCards.Count > 0)
+        {
+            return;
+        }
+
+        _botCards[MacroKind.FarmarSp] = new BotCardVisuals(
+            MacroKind.FarmarSp,
+            SpMacro,
+            SpBotImageFrame,
+            SpMacroImageGray,
+            SpMacroImageColor,
+            SpMacroImageGlint);
+
+        _botCards[MacroKind.Farmar200kMin] = new BotCardVisuals(
+            MacroKind.Farmar200kMin,
+            CrMacro,
+            CrBotImageFrame,
+            CrMacroImageGray,
+            CrMacroImageColor,
+            CrMacroImageGlint);
+
+        _botCards[MacroKind.FarmarWheelspins] = new BotCardVisuals(
+            MacroKind.FarmarWheelspins,
+            WheelspinMacro,
+            WheelspinBotImageFrame,
+            WheelspinMacroImageGray,
+            WheelspinMacroImageColor,
+            WheelspinMacroImageGlint);
+
+        try
+        {
+            SpMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/Skill_Points.png");
+            CrMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/CR_Icon.png");
+            WheelspinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
+        }
+        catch (Exception exception)
+        {
+            _logger.Warn($"Não foi possível carregar o efeito de escala de cinza dos cards: {exception.Message}");
+        }
+    }
+
+    private static Task<ImageSource> CreateGrayscaleImageSourceAsync(string assetPath)
+    {
+        if (GrayscaleImageCache.TryGetValue(assetPath, out var cached))
+        {
+            return Task.FromResult(cached);
+        }
+
+        return LoadAndGrayscaleAssetAsync(assetPath);
+    }
+
+    private static async Task<ImageSource> LoadAndGrayscaleAssetAsync(string assetPath)
+    {
+        var file = await StorageFile.GetFileFromApplicationUriAsync(new Uri(assetPath));
+        using var sourceStream = await file.OpenReadAsync();
+        var decoder = await BitmapDecoder.CreateAsync(sourceStream);
+        var data = await decoder.GetPixelDataAsync(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Premultiplied,
+            new BitmapTransform(),
+            ExifOrientationMode.IgnoreExifOrientation,
+            ColorManagementMode.DoNotColorManage);
+
+        var pixels = data.DetachPixelData();
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var b = pixels[i];
+            var g = pixels[i + 1];
+            var r = pixels[i + 2];
+            var a = pixels[i + 3];
+            var gray = (byte)Math.Clamp((0.299 * r + 0.587 * g + 0.114 * b), 0, 255);
+            pixels[i] = gray;
+            pixels[i + 1] = gray;
+            pixels[i + 2] = gray;
+            pixels[i + 3] = a;
+        }
+
+        var output = new InMemoryRandomAccessStream();
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output);
+        encoder.SetPixelData(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Premultiplied,
+            decoder.PixelWidth,
+            decoder.PixelHeight,
+            decoder.DpiX,
+            decoder.DpiY,
+            pixels);
+        await encoder.FlushAsync();
+
+        output.Seek(0);
+        var image = new BitmapImage();
+        await image.SetSourceAsync(output);
+        GrayscaleImageCache[assetPath] = image;
+        return image;
+    }
+
+    private void ApplyBotVisualState(MacroKind selectedKind)
+    {
+        foreach (var card in _botCards.Values)
+        {
+            var isSelected = card.Kind == selectedKind;
+            var colorVisual = ElementCompositionPreview.GetElementVisual(card.ColorImage);
+            colorVisual.Opacity = isSelected ? 1f : 0f;
+            SetGlintOpacity(card, 0f);
+        }
+    }
+
+    private static void SetGlintOpacity(BotCardVisuals card, float opacity)
+    {
+        var glintVisual = ElementCompositionPreview.GetElementVisual(card.Glint);
+        glintVisual.Opacity = opacity;
+    }
+
+    private async Task AnimateMacroSelectionTransitionAsync(MacroKind previousKind, MacroKind nextKind)
+    {
+        if (!_botCards.TryGetValue(previousKind, out var previousCard) || !_botCards.TryGetValue(nextKind, out var nextCard))
+        {
+            return;
+        }
+
+        if (_botAnimationCancellation is not null)
+        {
+            _botAnimationCancellation.Cancel();
+            _botAnimationCancellation.Dispose();
+        }
+
+        _botAnimationCancellation = new CancellationTokenSource();
+        var token = _botAnimationCancellation.Token;
+
+        await AnimateColorLayerOpacityAsync(previousCard, 0f, TimeSpan.FromMilliseconds(200), token);
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (_reduceMotion)
+        {
+            await AnimateColorLayerOpacityAsync(nextCard, 1f, TimeSpan.FromMilliseconds(160), token);
+            SetGlintOpacity(nextCard, 0f);
+            return;
+        }
+
+        var sequence = new[] { 0.32f, 0.7f, 1f };
+        foreach (var target in sequence)
+        {
+            await AnimateColorLayerOpacityAsync(nextCard, target, TimeSpan.FromMilliseconds(160), token);
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (target < 1f)
+            {
+                await AnimateGlintPassAsync(nextCard, token);
+            }
+        }
+
+        await AnimateColorLayerOpacityAsync(nextCard, 1f, TimeSpan.FromMilliseconds(80), token);
+    }
+
+    private static async Task AnimateColorLayerOpacityAsync(BotCardVisuals card, float targetOpacity, TimeSpan duration, CancellationToken token)
+    {
+        var visual = ElementCompositionPreview.GetElementVisual(card.ColorImage);
+        visual.StopAnimation(nameof(Visual.Opacity));
+
+        var compositor = visual.Compositor;
+        var animation = compositor.CreateScalarKeyFrameAnimation();
+        animation.Duration = duration;
+        animation.InsertKeyFrame(0f, (float)visual.Opacity);
+        animation.InsertKeyFrame(1f, targetOpacity);
+
+        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+        var tcs = new TaskCompletionSource();
+        batch.Completed += (_, _) =>
+        {
+            tcs.TrySetResult();
+        };
+
+        visual.StartAnimation(nameof(Visual.Opacity), animation);
+        batch.End();
+
+        await tcs.Task;
+        if (!token.IsCancellationRequested)
+        {
+            visual.Opacity = targetOpacity;
+            return;
+        }
+
+        visual.Opacity = targetOpacity;
+    }
+
+    private async Task AnimateGlintPassAsync(BotCardVisuals card, CancellationToken token)
+    {
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var visual = ElementCompositionPreview.GetElementVisual(card.Glint);
+        var compositor = visual.Compositor;
+        var hostWidth = (float)card.ImageHost.ActualWidth;
+        var hostHeight = (float)card.ImageHost.ActualHeight;
+        if (hostWidth <= 0 || hostHeight <= 0)
+        {
+            return;
+        }
+
+        var glintWidth = (float)card.Glint.ActualWidth;
+        var glintHeight = (float)card.Glint.ActualHeight;
+        visual.Offset = new Vector3(-glintWidth, -hostHeight, 0);
+        visual.Opacity = 0f;
+
+        var move = compositor.CreateVector3KeyFrameAnimation();
+        move.Duration = TimeSpan.FromMilliseconds(280);
+        move.InsertKeyFrame(0f, new Vector3(-glintWidth, -hostHeight, 0));
+        move.InsertKeyFrame(1f, new Vector3(hostWidth, hostHeight, 0));
+
+        var glow = compositor.CreateScalarKeyFrameAnimation();
+        glow.Duration = move.Duration;
+        glow.InsertKeyFrame(0f, 0f);
+        glow.InsertKeyFrame(0.15f, 0.52f);
+        glow.InsertKeyFrame(1f, 0f);
+
+        visual.StopAnimation(nameof(Visual.Offset));
+        visual.StopAnimation(nameof(Visual.Opacity));
+
+        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+        var tcs = new TaskCompletionSource();
+        batch.Completed += (_, _) =>
+        {
+            tcs.TrySetResult();
+            SetGlintOpacity(card, 0f);
+        };
+
+        visual.StartAnimation(nameof(Visual.Offset), move);
+        visual.StartAnimation(nameof(Visual.Opacity), glow);
+        batch.End();
+        await tcs.Task;
+    }
+
+    private async void Macro_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializingSelection || _updatingControls)
+        {
+            return;
+        }
+
         if (sender is not RadioButton { Tag: string tag } || !Enum.TryParse<MacroKind>(tag, out var kind))
         {
             return;
         }
 
+        if (kind == _selectedMacro)
+        {
+            return;
+        }
+
+        var previous = _selectedMacro;
+        _selectedMacro = kind;
+        await AnimateMacroSelectionTransitionAsync(previous, kind);
         _coordinator.Select(kind);
     }
 
@@ -196,11 +483,13 @@ public sealed partial class MainWindow : Window
             _updatingControls = true;
             ForegroundMode.IsChecked = true;
             BackgroundMode.IsChecked = false;
+            _selectedInputMode = InputMode.Foreground;
             _updatingControls = false;
             ViGEmInfoBar.IsOpen = true;
             return;
         }
 
+        _selectedInputMode = mode;
         SetInputMode(mode);
     }
 
@@ -247,6 +536,7 @@ public sealed partial class MainWindow : Window
 
                 _settings.InputMode = InputMode.Foreground;
                 _preferences.InputMode = InputMode.Foreground;
+                _selectedInputMode = InputMode.Foreground;
                 _updatingControls = true;
                 ForegroundMode.IsChecked = true;
                 BackgroundMode.IsChecked = false;
@@ -351,6 +641,8 @@ public sealed partial class MainWindow : Window
 
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        _botAnimationCancellation?.Cancel();
+        _botAnimationCancellation?.Dispose();
         MainContent.ActualThemeChanged -= MainContent_ActualThemeChanged;
         _hotkeys.Dispose();
         _resources.Changed -= Resources_Changed;
@@ -440,6 +732,7 @@ public sealed partial class MainWindow : Window
         _input.SetMode(mode);
         _settings.InputMode = mode;
         _preferences.InputMode = mode;
+        _selectedInputMode = mode;
         ApplyInputModeDescription(mode);
         SavePreferences();
         _logger.Info($"Modo de execução alterado para {InputModeLabel(mode)}.");
