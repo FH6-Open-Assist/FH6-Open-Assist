@@ -7,7 +7,7 @@ Assistente de automação de código aberto para **Forza Horizon 6**, feito para
 
 ## Baixar e executar (modo fácil)
 
-1. Abra a página de [Releases](https://github.com/Gavisira/FH6-Open-Assist/releases/latest).
+1. Abra a página de [Releases](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest).
 2. Baixe o arquivo `FH6-Open-Assist-win-x64.zip`.
 3. Extraia o ZIP para uma pasta comum, como `Documentos\FH6 Open Assist`.
 4. Para usar o modo em segundo plano, instale o [ViGEmBus oficial](https://github.com/nefarius/ViGEmBus/releases/latest) e reinicie o computador.
@@ -72,7 +72,7 @@ Ao pausar, todas as teclas são liberadas com segurança. Ao pressionar `F8` nov
 Esta seção é para desenvolvedores. Instale o [SDK do .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) e execute:
 
 ```powershell
-git clone https://github.com/Gavisira/FH6-Open-Assist.git
+git clone https://github.com/FH6-Open-Assist/FH6-Open-Assist.git
 cd FH6-Open-Assist
 dotnet restore
 dotnet run -c Release --project .\ForzaFarm.csproj
