@@ -26,6 +26,8 @@ namespace FH6OpenAssist;
 
 public sealed partial class MainWindow : Window
 {
+    private const int MaximumVisibleLogCharacters = 32_000;
+    private const int RetainedVisibleLogCharacters = 24_000;
     private readonly AppPaths _paths = AppPaths.Current;
     private readonly UserPreferences _preferences;
     private readonly AutomationSettings _settings;
@@ -44,6 +46,8 @@ public sealed partial class MainWindow : Window
     private bool _reduceMotion;
     private bool _shutdownStarted;
     private bool _shutdownComplete;
+    private bool _logScrollPending;
+    private ScrollViewer? _logScrollViewer;
     private MacroKind _selectedMacro = MacroKind.FarmarSp;
     private InputMode _selectedInputMode = InputMode.Foreground;
     private static readonly Dictionary<string, ImageSource> GrayscaleImageCache = new();
@@ -674,14 +678,68 @@ public sealed partial class MainWindow : Window
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
-            if (LogTextBox.Text.Length > 80_000)
+            var updatedText = LogTextBox.Text + line + Environment.NewLine;
+            if (updatedText.Length > MaximumVisibleLogCharacters)
             {
-                LogTextBox.Text = LogTextBox.Text[^50_000..];
+                var start = Math.Max(0, updatedText.Length - RetainedVisibleLogCharacters);
+                var nextLine = updatedText.IndexOf('\n', start);
+                if (nextLine >= 0 && nextLine + 1 < updatedText.Length)
+                {
+                    start = nextLine + 1;
+                }
+
+                updatedText = updatedText[start..];
             }
 
-            LogTextBox.Text += line + Environment.NewLine;
-            LogTextBox.SelectionStart = LogTextBox.Text.Length;
+            LogTextBox.Text = updatedText;
+            QueueLogScrollToEnd();
         });
+    }
+
+    private void QueueLogScrollToEnd()
+    {
+        if (_logScrollPending)
+        {
+            return;
+        }
+
+        _logScrollPending = true;
+        if (!_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+            {
+                _logScrollPending = false;
+                LogTextBox.Select(LogTextBox.Text.Length, 0);
+                LogTextBox.UpdateLayout();
+                _logScrollViewer ??= FindDescendantScrollViewer(LogTextBox);
+                _logScrollViewer?.ChangeView(
+                    horizontalOffset: null,
+                    verticalOffset: _logScrollViewer.ScrollableHeight,
+                    zoomFactor: null,
+                    disableAnimation: true);
+            }))
+        {
+            _logScrollPending = false;
+        }
+    }
+
+    private static ScrollViewer? FindDescendantScrollViewer(DependencyObject parent)
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(parent);
+        for (var index = 0; index < childCount; index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is ScrollViewer scrollViewer)
+            {
+                return scrollViewer;
+            }
+
+            var descendant = FindDescendantScrollViewer(child);
+            if (descendant is not null)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
     }
 
     private void Resources_Changed(ResourceSnapshot snapshot)

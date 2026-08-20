@@ -616,10 +616,11 @@
                     <Border
                         x:Name="LogPanel"
                         Grid.Column="2"
-                        MinHeight="480"
+                        Height="480"
                         Padding="16"
                         Background="{ThemeResource PanelBrush}"
-                        CornerRadius="8">
+                        CornerRadius="8"
+                        VerticalAlignment="Top">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
