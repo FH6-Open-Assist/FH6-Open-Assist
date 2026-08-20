@@ -1,5 +1,5 @@
 torch==2.11.0
-numpy==2.4.3
+numpy==2.5.2
 Pillow==12.1.1
 onnx==1.22.0
 onnxscript==0.7.1
