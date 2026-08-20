@@ -1,10 +1,10 @@
 using System.Drawing;
 using System.Text.RegularExpressions;
-using ForzaFarm.Core;
-using ForzaFarm.Vision;
-using ForzaFarm.Windows;
+using FH6OpenAssist.Core;
+using FH6OpenAssist.Vision;
+using FH6OpenAssist.Windows;
 
-namespace ForzaFarm.Workflows;
+namespace FH6OpenAssist.Workflows;
 
 public sealed record MasterySnapshot(int SkillPoints, bool SubaruSelected, string OcrText);
 
@@ -807,15 +807,7 @@ public sealed class GameNavigator(AutomationContext context)
             Workflow,
             "SairDaEntradaDaCasa",
             "Painel da casa ainda ativo; avançando brevemente antes de abrir o menu da rua.");
-        try
-        {
-            await context.Input.KeyDownAsync(GameKey.W, cancellationToken);
-            await Task.Delay(1_800, cancellationToken);
-        }
-        finally
-        {
-            await context.Input.KeyUpAsync(GameKey.W, CancellationToken.None);
-        }
+        await context.Input.HoldAsync(GameKey.W, 1_800, cancellationToken);
 
         await Task.Delay(2_500, cancellationToken);
     }
@@ -978,29 +970,15 @@ public sealed class GameNavigator(AutomationContext context)
 
     private async Task<bool> IsGarageAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            var document = await context.Vision.ReadScreenAsync(cancellationToken);
-            var normalized = GameVisionService.Normalize(document.Text);
-            return IsGarageText(normalized);
-        }
-        catch (AutomationFaultException)
-        {
-            return false;
-        }
+        var document = await context.Vision.ReadScreenAsync(cancellationToken);
+        var normalized = GameVisionService.Normalize(document.Text);
+        return IsGarageText(normalized);
     }
 
     private async Task<bool> IsGarageMainMenuAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            var document = await context.Vision.ReadScreenAsync(cancellationToken);
-            return IsGarageMainMenuText(GameVisionService.Normalize(document.Text));
-        }
-        catch (AutomationFaultException)
-        {
-            return false;
-        }
+        var document = await context.Vision.ReadScreenAsync(cancellationToken);
+        return IsGarageMainMenuText(GameVisionService.Normalize(document.Text));
     }
 
     private static bool IsGarageText(string normalized)

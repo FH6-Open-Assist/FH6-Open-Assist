@@ -31,7 +31,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restaurar dependências
-        run: dotnet restore .\ForzaFarm.csproj -r win-x64
+        run: dotnet restore .\FH6OpenAssist.csproj -r win-x64
 
       - name: Compilar e validar os pacotes de Release
         run: .\scripts\build-release.ps1 -Version 0.0.0-ci -NoRestore -OutputDirectory .\artifacts\release

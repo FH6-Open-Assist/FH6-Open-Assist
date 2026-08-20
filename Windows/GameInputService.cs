@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-using ForzaFarm.Core;
+using FH6OpenAssist.Core;
 using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 
-namespace ForzaFarm.Windows;
+namespace FH6OpenAssist.Windows;
 
 public enum GameKey : ushort
 {
@@ -48,7 +49,6 @@ public enum GameKey : ushort
     X = 0x58,
     Y = 0x59
 }
-
 public static class GameKeyTranslator
 {
     public static byte ToForegroundVirtualKey(GameKey key) => key switch
@@ -98,13 +98,19 @@ public static class GameKeyTranslator
 
 public sealed class GameInputService : IDisposable
 {
+    private readonly record struct PressedInput(
+        InputMode Mode,
+        IntPtr WindowHandle,
+        uint ProcessId);
+
     private readonly GameWindowService _windows;
     private readonly AutomationSettings _settings;
     private readonly AutomationLogger _logger;
     private readonly object _lifecycleSync = new();
     private ViGEmClient? _client;
     private IXbox360Controller? _controller;
-    private readonly ConcurrentDictionary<GameKey, InputMode> _pressedKeys = new();
+    private readonly ConcurrentDictionary<GameKey, PressedInput> _pressedKeys = new();
+    private bool _analogAcceleratorActive;
     private string? _backgroundInputError;
     private InputMode _mode;
     private bool _disposing;
@@ -200,9 +206,129 @@ public sealed class GameInputService : IDisposable
     public async Task TapAsync(GameKey key, CancellationToken cancellationToken, int holdMs = 65)
     {
         await KeyDownAsync(key, cancellationToken);
-        await Task.Delay(holdMs, cancellationToken);
-        await KeyUpAsync(key, CancellationToken.None);
+        try
+        {
+            await Task.Delay(holdMs, cancellationToken);
+        }
+        finally
+        {
+            await KeyUpAsync(key, CancellationToken.None);
+        }
+
         await Task.Delay(_settings.ActionDelayMs, cancellationToken);
+    }
+
+    public async Task HoldAsync(
+        GameKey key,
+        int holdMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(holdMilliseconds);
+
+        await KeyDownAsync(key, cancellationToken);
+        try
+        {
+            await MonitorHeldInputAsync(key, holdMilliseconds, cancellationToken);
+        }
+        finally
+        {
+            await KeyUpAsync(key, CancellationToken.None);
+        }
+    }
+
+    public async Task HoldPreciselyAsync(
+        GameKey key,
+        int holdMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(holdMilliseconds);
+
+        await KeyDownAsync(key, cancellationToken);
+        try
+        {
+            MonitorHeldInputPrecisely(key, holdMilliseconds, cancellationToken);
+        }
+        finally
+        {
+            await KeyUpAsync(key, CancellationToken.None);
+        }
+    }
+
+    public Task DelayPreciselyAsync(
+        int delayMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(delayMilliseconds);
+        WaitPrecisely(
+            delayMilliseconds,
+            cancellationToken,
+            healthCheck: null);
+        return Task.CompletedTask;
+    }
+
+    public async Task PulseAcceleratorAsync(
+        double strength,
+        int holdMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(holdMilliseconds);
+        if (strength is <= 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(strength),
+                "A intensidade do acelerador deve estar entre 0 (exclusivo) e 1.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var mode = GetModeForOperation();
+        var game = GetUsableWindow(mode);
+        _ = GetWindowThreadProcessId(game.Handle, out var processId);
+        if (processId == 0)
+        {
+            throw new AutomationFaultException(
+                "Não foi possível confirmar o processo do Forza antes do pulso analógico.");
+        }
+
+        EnsureBackgroundInputAvailable();
+        var expectedInput = new PressedInput(mode, game.Handle, processId);
+        var triggerValue = (byte)Math.Clamp(
+            (int)Math.Round(strength * byte.MaxValue),
+            1,
+            byte.MaxValue);
+
+        ExecuteControllerOperation(
+            controller =>
+            {
+                controller.SetSliderValue(Xbox360Slider.RightTrigger, triggerValue);
+                _analogAcceleratorActive = true;
+            },
+            $"aplicar acelerador analógico a {strength:P0}");
+        try
+        {
+            await Task.Run(
+                () => WaitPrecisely(
+                    holdMilliseconds,
+                    cancellationToken,
+                    () => EnsureInputTarget(expectedInput, "acelerador analógico")),
+                cancellationToken);
+        }
+        finally
+        {
+            try
+            {
+                ExecuteControllerOperation(
+                    controller => controller.SetSliderValue(Xbox360Slider.RightTrigger, 0),
+                    "soltar acelerador analógico",
+                    allowWhileDisposing: true);
+            }
+            finally
+            {
+                lock (_lifecycleSync)
+                {
+                    _analogAcceleratorActive = false;
+                }
+            }
+        }
     }
 
     public async Task TypeTextAsync(string text, CancellationToken cancellationToken)
@@ -262,6 +388,14 @@ public sealed class GameInputService : IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         var mode = GetModeForOperation();
         var game = GetUsableWindow(mode);
+        _ = GetWindowThreadProcessId(game.Handle, out var processId);
+        if (processId == 0)
+        {
+            throw new AutomationFaultException(
+                "Não foi possível confirmar o processo da janela do Forza antes de enviar a entrada.");
+        }
+
+        var pressedInput = new PressedInput(mode, game.Handle, processId);
 
         if (mode == InputMode.Foreground)
         {
@@ -269,7 +403,7 @@ public sealed class GameInputService : IDisposable
             {
                 ThrowIfDisposedOrDisposingLocked();
                 keybd_event(GameKeyTranslator.ToForegroundVirtualKey(key), 0, 0, UIntPtr.Zero);
-                _pressedKeys[key] = mode;
+                _pressedKeys[key] = pressedInput;
             }
 
             return Task.CompletedTask;
@@ -293,7 +427,7 @@ public sealed class GameInputService : IDisposable
                         $"O Windows recusou o caractere '{character}' enviado ao Forza em segundo plano.");
                 }
 
-                _pressedKeys[key] = mode;
+                _pressedKeys[key] = pressedInput;
             }
 
             return Task.CompletedTask;
@@ -315,10 +449,174 @@ public sealed class GameInputService : IDisposable
                     controller.SetButtonState(MapButton(key), true);
                 }
 
-                _pressedKeys[key] = mode;
+                _pressedKeys[key] = pressedInput;
             },
             $"pressionar {key}");
         return Task.CompletedTask;
+    }
+
+    private async Task MonitorHeldInputAsync(
+        GameKey key,
+        int holdMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        if (!_pressedKeys.TryGetValue(key, out var pressedInput))
+        {
+            throw new AutomationFaultException(
+                $"A tecla {key} foi liberada antes de iniciar a sustentação segura.");
+        }
+
+        var startedAt = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            EnsureHeldInputTarget(key, pressedInput);
+
+            var elapsedMilliseconds = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            var remainingMilliseconds = holdMilliseconds - elapsedMilliseconds;
+            if (remainingMilliseconds <= 0)
+            {
+                break;
+            }
+
+            var slice = Math.Max(
+                1,
+                (int)Math.Ceiling(Math.Min(
+                    HoldHealthCheckIntervalMilliseconds,
+                    remainingMilliseconds)));
+            await Task.Delay(slice, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureHeldInputTarget(key, pressedInput);
+    }
+
+    private void MonitorHeldInputPrecisely(
+        GameKey key,
+        int holdMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        if (!_pressedKeys.TryGetValue(key, out var pressedInput))
+        {
+            throw new AutomationFaultException(
+                $"A tecla {key} foi liberada antes de iniciar a sustentação precisa.");
+        }
+
+        WaitPrecisely(
+            holdMilliseconds,
+            cancellationToken,
+            () => EnsureHeldInputTarget(key, pressedInput));
+    }
+
+    private static void WaitPrecisely(
+        int milliseconds,
+        CancellationToken cancellationToken,
+        Action? healthCheck)
+    {
+        if (milliseconds <= 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            healthCheck?.Invoke();
+            return;
+        }
+
+        var timer = CreateWaitableTimerEx(
+            IntPtr.Zero,
+            null,
+            CreateWaitableTimerHighResolution,
+            TimerAllAccess);
+        var deadline = Stopwatch.GetTimestamp() +
+                       (long)Math.Ceiling(milliseconds * (double)Stopwatch.Frequency / 1_000);
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                healthCheck?.Invoke();
+
+                var remainingTicks = deadline - Stopwatch.GetTimestamp();
+                if (remainingTicks <= 0)
+                {
+                    return;
+                }
+
+                var remainingMilliseconds = remainingTicks * 1_000d / Stopwatch.Frequency;
+                var sliceMilliseconds = Math.Min(
+                    HoldHealthCheckIntervalMilliseconds,
+                    remainingMilliseconds);
+                if (timer != IntPtr.Zero && WaitWithHighResolutionTimer(timer, sliceMilliseconds))
+                {
+                    continue;
+                }
+
+                var fallbackDeadline = Math.Min(
+                    deadline,
+                    Stopwatch.GetTimestamp() +
+                    (long)Math.Ceiling(
+                        sliceMilliseconds * Stopwatch.Frequency / 1_000d));
+                WaitWithMonotonicFallback(fallbackDeadline, cancellationToken);
+            }
+        }
+        finally
+        {
+            if (timer != IntPtr.Zero)
+            {
+                _ = CancelWaitableTimer(timer);
+                _ = CloseHandle(timer);
+            }
+        }
+    }
+
+    private static bool WaitWithHighResolutionTimer(
+        IntPtr timer,
+        double milliseconds)
+    {
+        var dueTime = -(long)Math.Max(
+            1,
+            Math.Ceiling(milliseconds * TimeSpan.TicksPerMillisecond));
+        if (!SetWaitableTimer(
+                timer,
+                ref dueTime,
+                0,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                false))
+        {
+            return false;
+        }
+
+        return WaitForSingleObject(timer, Infinite) == WaitObject0;
+    }
+
+    private static void WaitWithMonotonicFallback(
+        long deadline,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var remainingTicks = deadline - Stopwatch.GetTimestamp();
+            if (remainingTicks <= 0)
+            {
+                return;
+            }
+
+            var remainingMilliseconds = remainingTicks * 1_000d / Stopwatch.Frequency;
+            if (remainingMilliseconds > 1)
+            {
+                var coarseWait = Math.Max(1, (int)Math.Floor(remainingMilliseconds - 0.5));
+                _ = cancellationToken.WaitHandle.WaitOne(coarseWait);
+                continue;
+            }
+
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Thread.SpinWait(16);
+            }
+
+            return;
+        }
     }
 
     public Task KeyUpAsync(GameKey key, CancellationToken cancellationToken)
@@ -333,7 +631,9 @@ public sealed class GameInputService : IDisposable
                 return Task.CompletedTask;
             }
 
-            mode = _pressedKeys.TryGetValue(key, out var pressedMode) ? pressedMode : _mode;
+            mode = _pressedKeys.TryGetValue(key, out var pressedInput)
+                ? pressedInput.Mode
+                : _mode;
         }
 
         try
@@ -445,6 +745,34 @@ public sealed class GameInputService : IDisposable
                 _logger.Warn($"Não foi possível soltar {key}: {exception.Message}");
             }
         }
+
+        var releaseAnalogAccelerator = false;
+        lock (_lifecycleSync)
+        {
+            releaseAnalogAccelerator = _analogAcceleratorActive && _controller is not null;
+        }
+
+        if (releaseAnalogAccelerator)
+        {
+            try
+            {
+                ExecuteControllerOperation(
+                    controller => controller.SetSliderValue(Xbox360Slider.RightTrigger, 0),
+                    "liberar acelerador analógico",
+                    allowWhileDisposing: true);
+            }
+            catch (Exception exception)
+            {
+                _logger.Warn($"Não foi possível liberar o acelerador analógico: {exception.Message}");
+            }
+            finally
+            {
+                lock (_lifecycleSync)
+                {
+                    _analogAcceleratorActive = false;
+                }
+            }
+        }
     }
 
     public void Dispose()
@@ -480,12 +808,61 @@ public sealed class GameInputService : IDisposable
 
         if (mode == InputMode.Foreground)
         {
-            _ = ShowWindowAsync(game.Handle, ShowNormal);
-            _ = BringWindowToTop(game.Handle);
-            _ = SetForegroundWindow(game.Handle);
+            for (var attempt = 0; attempt < 5 && GetForegroundWindow() != game.Handle; attempt++)
+            {
+                _ = ShowWindowAsync(game.Handle, ShowNormal);
+                _ = BringWindowToTop(game.Handle);
+                _ = SetForegroundWindow(game.Handle);
+                Thread.Sleep(35);
+            }
+
+            if (GetForegroundWindow() != game.Handle)
+            {
+                throw new AutomationFaultException(
+                    "O Windows não concedeu foco real ao Forza. A entrada foi bloqueada para não atingir outro aplicativo.");
+            }
         }
 
         return game;
+    }
+
+    private void EnsureHeldInputTarget(
+        GameKey key,
+        PressedInput expectedInput)
+    {
+        if (!_pressedKeys.TryGetValue(key, out var pressedInput) || pressedInput != expectedInput)
+        {
+            throw new AutomationFaultException(
+                $"A sustentação de {key} foi interrompida porque a entrada deixou de estar ativa.");
+        }
+
+        EnsureInputTarget(expectedInput, key.ToString());
+    }
+
+    private static void EnsureInputTarget(
+        PressedInput expectedInput,
+        string inputName)
+    {
+        if (!IsWindow(expectedInput.WindowHandle) ||
+            !IsWindowVisible(expectedInput.WindowHandle) ||
+            IsIconic(expectedInput.WindowHandle))
+        {
+            throw new AutomationFaultException(
+                $"A sustentação de {inputName} foi interrompida porque a janela do Forza foi fechada, ocultada ou minimizada.");
+        }
+
+        _ = GetWindowThreadProcessId(expectedInput.WindowHandle, out var currentProcessId);
+        if (currentProcessId == 0 || currentProcessId != expectedInput.ProcessId)
+        {
+            throw new AutomationFaultException(
+                $"A sustentação de {inputName} foi interrompida porque o processo do Forza não é mais o mesmo.");
+        }
+
+        if (expectedInput.Mode == InputMode.Foreground && GetForegroundWindow() != expectedInput.WindowHandle)
+        {
+            throw new AutomationFaultException(
+                $"A sustentação de {inputName} foi interrompida porque o Forza perdeu o foco.");
+        }
     }
 
     private InputMode GetModeForOperation()
@@ -667,6 +1044,11 @@ public sealed class GameInputService : IDisposable
     private const byte VirtualKeyShift = 0x10;
     private const byte VirtualKeyControl = 0x11;
     private const byte VirtualKeyMenu = 0x12;
+    private const int HoldHealthCheckIntervalMilliseconds = 100;
+    private const uint CreateWaitableTimerHighResolution = 0x00000002;
+    private const uint TimerAllAccess = 0x001F0003;
+    private const uint Infinite = 0xFFFFFFFF;
+    private const uint WaitObject0 = 0x00000000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
@@ -701,4 +1083,44 @@ public sealed class GameInputService : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateWaitableTimerEx(
+        IntPtr timerAttributes,
+        string? timerName,
+        uint flags,
+        uint desiredAccess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetWaitableTimer(
+        IntPtr timer,
+        ref long dueTime,
+        int period,
+        IntPtr completionRoutine,
+        IntPtr completionRoutineArgument,
+        bool resume);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CancelWaitableTimer(IntPtr timer);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
 }

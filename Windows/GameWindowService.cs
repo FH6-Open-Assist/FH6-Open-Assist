@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using ForzaFarm.Core;
+using FH6OpenAssist.Core;
 
-namespace ForzaFarm.Windows;
+namespace FH6OpenAssist.Windows;
 
 public sealed record GameWindowInfo(
     IntPtr Handle,
@@ -40,9 +40,18 @@ public sealed class GameWindowService(AutomationSettings settings, AutomationLog
         IntPtr handle = IntPtr.Zero;
         try
         {
-            var process = Process.GetProcessesByName(settings.GameProcessName)
-                .FirstOrDefault(candidate => candidate.MainWindowHandle != IntPtr.Zero);
-            handle = process?.MainWindowHandle ?? IntPtr.Zero;
+            foreach (var process in Process.GetProcessesByName(settings.GameProcessName))
+            {
+                using (process)
+                {
+                    var candidate = process.MainWindowHandle;
+                    if (candidate != IntPtr.Zero)
+                    {
+                        handle = candidate;
+                        break;
+                    }
+                }
+            }
         }
         catch
         {

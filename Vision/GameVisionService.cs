@@ -1,11 +1,12 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using ForzaFarm.Core;
-using ForzaFarm.Windows;
+using FH6OpenAssist.Core;
+using FH6OpenAssist.Windows;
 
-namespace ForzaFarm.Vision;
+namespace FH6OpenAssist.Vision;
 
 public sealed class GameVisionService(
     GameCaptureService capture,
@@ -18,6 +19,17 @@ public sealed class GameVisionService(
     {
         using var frame = await capture.CaptureAsync(cancellationToken);
         return await ocr.ReadAsync(frame.Bitmap, cancellationToken);
+    }
+
+    public async Task<TResult> AnalyzeScreenAsync<TResult>(
+        Func<Bitmap, OcrDocument, TResult> analyze,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(analyze);
+        using var frame = await capture.CaptureAsync(cancellationToken);
+        var document = await ocr.ReadAsync(frame.Bitmap, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return analyze(frame.Bitmap, document);
     }
 
     public async Task<OcrDocument> ReadRegionAsync(
@@ -194,6 +206,7 @@ public sealed class GameVisionService(
         var region = ToPixels(frame.Bitmap, normalizedRegion);
         const int scale = 4;
         const int padding = 24;
+        var yellowMask = new bool[region.Width, region.Height];
         using var processed = new Bitmap(
             region.Width * scale + padding * 2,
             region.Height * scale + padding * 2);
@@ -219,6 +232,7 @@ public sealed class GameVisionService(
                     continue;
                 }
 
+                yellowMask[x, y] = true;
                 for (var dy = 0; dy < scale; dy++)
                 {
                     for (var dx = 0; dx < scale; dx++)
@@ -229,24 +243,177 @@ public sealed class GameVisionService(
             }
         }
 
-        var document = await ocr.ReadAsync(processed, cancellationToken);
+        using var focused = CreateFocusedYellowNumberBitmap(
+            frame.Bitmap,
+            region,
+            yellowMask,
+            scale);
+        var document = focused is null
+            ? await ocr.ReadAsync(frame.Bitmap, cancellationToken, region)
+            : await ocr.ReadAsync(focused, cancellationToken);
+        var ocrSource = focused is null ? "recorte colorido" : "recorte focado";
         var numbers = ExtractNumbers(document.Text)
             .Where(number => number >= 0 && number <= maximum)
             .ToArray();
+        if (numbers.Length == 0 && focused is not null)
+        {
+            // O recorte colorido completo é barato e reconheceu corretamente
+            // fontes pontilhadas que o binário amplo não conseguiu interpretar.
+            document = await ocr.ReadAsync(frame.Bitmap, cancellationToken, region);
+            numbers = ExtractNumbers(document.Text)
+                .Where(number => number >= 0 && number <= maximum)
+                .ToArray();
+            ocrSource = "recorte colorido";
+        }
+
+        if (numbers.Length == 0)
+        {
+            document = await ocr.ReadAsync(processed, cancellationToken);
+            numbers = ExtractNumbers(document.Text)
+                .Where(number => number >= 0 && number <= maximum)
+                .ToArray();
+            ocrSource = "binário amplo";
+        }
+
         logger.State(
             workflow,
             state,
-            $"OCR amarelo: '{document.Text.Replace("\r", " ").Replace("\n", " ").Trim()}'; candidatos: [{string.Join(", ", numbers)}].");
+            $"OCR amarelo ({ocrSource}): " +
+            $"'{document.Text.Replace("\r", " ").Replace("\n", " ").Trim()}'; " +
+            $"candidatos: [{string.Join(", ", numbers)}].");
         if (numbers.Length == 0)
         {
             var path = capture.SaveDiagnostic(frame.Bitmap, workflow, state);
             var processedPath = capture.SaveDiagnostic(processed, workflow, $"{state}-Amarelo");
+            var focusedPath = focused is null
+                ? null
+                : capture.SaveDiagnostic(focused, workflow, $"{state}-AmareloFocado");
             throw new CalibrationRequiredException(
                 $"Não foi possível ler o saldo amarelo em '{state}'. OCR: '{document.Text}'. " +
-                $"Diagnósticos: {path}; processado: {processedPath}");
+                $"Diagnósticos: {path}; processado: {processedPath}" +
+                (focusedPath is null ? string.Empty : $"; focado: {focusedPath}"));
         }
 
         return numbers.Max();
+    }
+
+    private static Bitmap? CreateFocusedYellowNumberBitmap(
+        Bitmap source,
+        Rectangle region,
+        bool[,] yellowMask,
+        int scale)
+    {
+        const int maximumGap = 3;
+        var searchTop = region.Height / 2;
+        var bestStart = -1;
+        var bestEnd = -1;
+        var bestPixelCount = 0;
+        var runStart = -1;
+        var lastActive = -1;
+        var runPixelCount = 0;
+
+        for (var x = 0; x < region.Width - 7; x++)
+        {
+            var columnPixelCount = 0;
+            for (var y = searchTop; y < region.Height; y++)
+            {
+                if (yellowMask[x, y])
+                {
+                    columnPixelCount++;
+                }
+            }
+
+            if (columnPixelCount == 0)
+            {
+                continue;
+            }
+
+            if (runStart >= 0 && x - lastActive > maximumGap + 1)
+            {
+                ConsiderRun(runStart, lastActive, runPixelCount);
+                runStart = -1;
+                runPixelCount = 0;
+            }
+
+            runStart = runStart < 0 ? x : runStart;
+            lastActive = x;
+            runPixelCount += columnPixelCount;
+        }
+
+        if (runStart >= 0)
+        {
+            ConsiderRun(runStart, lastActive, runPixelCount);
+        }
+
+        if (bestStart < 0)
+        {
+            return null;
+        }
+
+        var top = region.Height;
+        var bottom = -1;
+        for (var x = bestStart; x <= bestEnd; x++)
+        {
+            for (var y = searchTop; y < region.Height; y++)
+            {
+                if (!yellowMask[x, y])
+                {
+                    continue;
+                }
+
+                top = Math.Min(top, y);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+
+        if (bottom < top)
+        {
+            return null;
+        }
+
+        const int horizontalPadding = 3;
+        const int verticalPadding = 10;
+        var left = Math.Max(0, bestStart - horizontalPadding);
+        var right = Math.Min(region.Width, bestEnd + horizontalPadding + 1);
+        top = Math.Max(0, top - verticalPadding);
+        bottom = Math.Min(region.Height, bottom + verticalPadding + 1);
+        var sourceRegion = new Rectangle(
+            region.Left + left,
+            region.Top + top,
+            right - left,
+            bottom - top);
+        if (sourceRegion.Width <= 0 || sourceRegion.Height <= 0)
+        {
+            return null;
+        }
+
+        var focused = new Bitmap(sourceRegion.Width * scale, sourceRegion.Height * scale);
+        using var graphics = Graphics.FromImage(focused);
+        graphics.CompositingMode = CompositingMode.SourceCopy;
+        graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+        graphics.PixelOffsetMode = PixelOffsetMode.Half;
+        graphics.DrawImage(
+            source,
+            new Rectangle(0, 0, focused.Width, focused.Height),
+            sourceRegion,
+            GraphicsUnit.Pixel);
+        return focused;
+
+        void ConsiderRun(int start, int end, int pixelCount)
+        {
+            var width = end - start + 1;
+            if (width < 8 || pixelCount < 16)
+            {
+                return;
+            }
+
+            if (end > bestEnd || end == bestEnd && pixelCount > bestPixelCount)
+            {
+                bestStart = start;
+                bestEnd = end;
+                bestPixelCount = pixelCount;
+            }
+        }
     }
 
     public async Task<bool> HasMagentaMarkerAsync(

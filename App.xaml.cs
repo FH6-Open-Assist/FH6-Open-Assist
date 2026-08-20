@@ -1,7 +1,7 @@
-using ForzaFarm.Core;
+using FH6OpenAssist.Core;
 using Microsoft.UI.Xaml;
 
-namespace ForzaFarm;
+namespace FH6OpenAssist;
 
 public partial class App : Application
 {

@@ -17,5 +17,25 @@
     "SkillPointsPerCar": 30,
     "CreditsPerCar": 100000,
     "PreserveCredits": 0
+  },
+  "CrFarm": {
+    "PositionModelFileName": "cr-position.onnx",
+    "DatasetDirectory": "ExemplosPosition",
+    "InputWidth": 160,
+    "InputHeight": 96,
+    "CropX": 0.18,
+    "CropY": 0.18,
+    "CropWidth": 0.68,
+    "CropHeight": 0.82,
+    "ValidThreshold": 0.90,
+    "InvalidThreshold": 0.20,
+    "ConsensusFrames": 3,
+    "FrameIntervalMs": 300,
+    "OutcomeSettleMs": 1200,
+    "RecoveryDelaySeconds": 15,
+    "MaximumRecoveries": 10,
+    "MinimumSuccessfulCreditGain": 100000,
+    "MaximumSamplesPerClass": 600,
+    "CollectSamples": true
   }
 }

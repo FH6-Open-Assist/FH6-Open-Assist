@@ -294,7 +294,7 @@
                     Margin="0,16,0,0"
                     IsClosable="False"
                     IsOpen="False"
-                    Message="O primeiro plano segue disponível com teclado e mouse nativos. Instale o ViGEmBus para liberar o segundo plano."
+                    Message="Os demais BOTs seguem disponíveis em primeiro plano. O Farm de CR exige ViGEmBus para o ajuste analógico; o segundo plano também depende dele."
                     Severity="Warning"
                     Title="Segundo plano indisponível">
                     <InfoBar.ActionButton>
@@ -467,6 +467,59 @@
                                                 Text="Compra, melhora e gira carros pela sequência Mad Mike."
                                                 TextWrapping="Wrap" />
                                             <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recursos: SP e créditos" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </RadioButton>
+
+                        <RadioButton
+                            x:Name="SpendWheelspinMacro"
+                            AutomationProperties.Name="4 · Gastar Wheelspins"
+                            GroupName="Macros"
+                            Style="{StaticResource BotSelectionCardStyle}"
+                            Tag="GastarWheelspins"
+                            Checked="Macro_Checked">
+                            <Grid>
+                                <Border
+                                    x:Name="SpendWheelspinBotImageFrame"
+                                    CornerRadius="11">
+                                    <Grid>
+                                        <Image
+                                            x:Name="SpendWheelspinMacroImageGray"
+                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                            Stretch="UniformToFill" />
+                                        <Image
+                                            x:Name="SpendWheelspinMacroImageColor"
+                                            Opacity="0"
+                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                            Stretch="UniformToFill" />
+                                        <Border x:Name="SpendWheelspinMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
+                                        <Border
+                                            x:Name="SpendWheelspinMacroImageGlint"
+                                            Width="180"
+                                            Height="300"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Background="{StaticResource BotImageGlintBrush}"
+                                            IsHitTestVisible="False"
+                                            Opacity="0"
+                                            RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="-22" />
+                                            </Border.RenderTransform>
+                                        </Border>
+                                        <StackPanel
+                                            Margin="16,0"
+                                            VerticalAlignment="Center"
+                                            Spacing="4">
+                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="4 · Gastar Wheelspins" />
+                                            <TextBlock
+                                                Foreground="#E6FFFFFF"
+                                                FontSize="12"
+                                                Text="Gira Super Wheelspins e Wheelspins com confirmação visual."
+                                                TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: Wheelspins" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>

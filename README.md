@@ -22,7 +22,7 @@ O pacote publicado é autossuficiente: não é necessário instalar o .NET para 
 
 ### Como usar
 
-1. Selecione um dos três BOTs.
+1. Selecione um dos quatro BOTs.
 2. Escolha **Primeiro plano** (mais confiável) ou **Segundo plano (teste)**.
 3. Clique no botão vermelho **Instruções** e prepare o jogo.
 4. Clique em **Ativar BOT**.
@@ -52,6 +52,7 @@ Ao pausar, todas as teclas são liberadas com segurança. Ao pressionar `F8` nov
 - Selecione o **Nissan S-Cargo S1 800**, sem tunagem.
 - Desative todas as assistências.
 - Coloque a dificuldade em **Imbatível**.
+- Instale o **ViGEmBus**: o encaixe lento entre as placas usa aceleração analógica, inclusive no modo de primeiro plano.
 - Vá para a rua.
 - Não ative este BOT dentro da garagem.
 
@@ -60,6 +61,13 @@ Ao pausar, todas as teclas são liberadas com segurança. Ao pressionar `F8` nov
 - É necessário ser **VIP**.
 - Tenha mais de **100.000 CR** e mais de **30 SP**.
 - Esteja na garagem, no menu **Campanha**.
+
+### 4 - Gastar Wheelspins
+
+- Comece na rua, no menu de pausa ou em uma tela de Wheelspin.
+- O BOT prioriza Super Wheelspins e só gira após duas confirmações visuais.
+- Saldo zero encerra o fluxo sem tentar comprar giros com créditos.
+- Carros duplicados são mantidos; o BOT não vende nem presenteia automaticamente.
 
 ## Requisitos e observações
 

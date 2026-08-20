@@ -18,8 +18,8 @@ Obrigado por querer melhorar o FH6 Open Assist.
 4. Restaure e compile:
 
 ```powershell
-dotnet restore .\ForzaFarm.csproj
-dotnet build .\ForzaFarm.csproj -c Release --no-restore
+dotnet restore .\FH6OpenAssist.csproj
+dotnet build .\FH6OpenAssist.csproj -c Release --no-restore
 ```
 
 ## Diretrizes

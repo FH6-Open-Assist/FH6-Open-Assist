@@ -1,4 +1,4 @@
-namespace ForzaFarm.Core;
+namespace FH6OpenAssist.Core;
 
 public sealed record ResourceSnapshot(
     int? SkillPoints,

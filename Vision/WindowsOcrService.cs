@@ -1,11 +1,12 @@
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Text;
-using System.Text.Json;
-using ForzaFarm.Core;
+using System.Runtime.InteropServices;
+using FH6OpenAssist.Core;
+using Windows.Graphics.Imaging;
+using Windows.Media.Ocr;
+using Windows.Storage.Streams;
 
-namespace ForzaFarm.Vision;
+namespace FH6OpenAssist.Vision;
 
 public sealed record OcrLine(string Text, double X, double Y, double Width, double Height)
 {
@@ -16,18 +17,24 @@ public sealed record OcrDocument(string Text, IReadOnlyList<OcrLine> Lines);
 
 public sealed record TextMatch(string RequestedText, OcrLine Line, string NormalizedText);
 
-public sealed class WindowsOcrService(AutomationSettings settings)
+public sealed class WindowsOcrService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private readonly SemaphoreSlim _recognitionGate = new(1, 1);
+    private OcrEngine? _engine;
+
+    public WindowsOcrService(AutomationSettings settings)
     {
-        PropertyNameCaseInsensitive = true
-    };
+        ArgumentNullException.ThrowIfNull(settings);
+    }
 
     public async Task<OcrDocument> ReadAsync(
         Bitmap source,
         CancellationToken cancellationToken,
         Rectangle? region = null)
     {
+        ArgumentNullException.ThrowIfNull(source);
+        cancellationToken.ThrowIfCancellationRequested();
+
         var effectiveRegion = region ?? new Rectangle(0, 0, source.Width, source.Height);
         effectiveRegion.Intersect(new Rectangle(0, 0, source.Width, source.Height));
         if (effectiveRegion.Width <= 0 || effectiveRegion.Height <= 0)
@@ -35,58 +42,26 @@ public sealed class WindowsOcrService(AutomationSettings settings)
             throw new ArgumentOutOfRangeException(nameof(region), "A região de OCR está fora da imagem.");
         }
 
-        using var image = source.Clone(effectiveRegion, PixelFormat.Format24bppRgb);
-        var temporaryPath = Path.Combine(Path.GetTempPath(), $"forza-farm-ocr-{Guid.NewGuid():N}.png");
-        image.Save(temporaryPath, ImageFormat.Png);
-
+        var gateAcquired = false;
         try
         {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-            startInfo.ArgumentList.Add("-NoLogo");
-            startInfo.ArgumentList.Add("-NoProfile");
-            startInfo.ArgumentList.Add("-NonInteractive");
-            startInfo.ArgumentList.Add("-ExecutionPolicy");
-            startInfo.ArgumentList.Add("Bypass");
-            startInfo.ArgumentList.Add("-File");
-            startInfo.ArgumentList.Add(settings.OcrScriptPath);
-            startInfo.ArgumentList.Add("-Path");
-            startInfo.ArgumentList.Add(temporaryPath);
+            await _recognitionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            gateAcquired = true;
 
-            using var process = Process.Start(startInfo)
-                ?? throw new AutomationFaultException("Não foi possível iniciar o OCR do Windows.");
-            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-            var standardOutput = await standardOutputTask;
-            var standardError = await standardErrorTask;
-            if (process.ExitCode != 0)
-            {
-                throw new AutomationFaultException(
-                    $"OCR do Windows falhou ({process.ExitCode}): {standardError.Trim()}");
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            using var softwareBitmap = CreateSoftwareBitmap(source, effectiveRegion, cancellationToken);
+            var engine = _engine ??= OcrEngine.TryCreateFromUserProfileLanguages()
+                ?? throw new AutomationFaultException("O OCR nativo do Windows não está disponível.");
 
-            var payload = JsonSerializer.Deserialize<OcrPayload>(standardOutput.Trim(), JsonOptions)
-                ?? new OcrPayload();
-            var lines = payload.Lines
-                .Select(line => new OcrLine(
-                    line.Text ?? string.Empty,
-                    line.X + effectiveRegion.X,
-                    line.Y + effectiveRegion.Y,
-                    line.Width,
-                    line.Height))
-                .ToArray();
-            return new OcrDocument(payload.Text ?? string.Empty, lines);
+            var result = await engine
+                .RecognizeAsync(softwareBitmap)
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return CreateDocument(result, effectiveRegion, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -100,29 +75,79 @@ public sealed class WindowsOcrService(AutomationSettings settings)
         }
         finally
         {
-            try
+            if (gateAcquired)
             {
-                File.Delete(temporaryPath);
-            }
-            catch
-            {
-                // O arquivo temporário será removido pelo Windows posteriormente.
+                _recognitionGate.Release();
             }
         }
     }
 
-    private sealed class OcrPayload
+    private static SoftwareBitmap CreateSoftwareBitmap(
+        Bitmap source,
+        Rectangle region,
+        CancellationToken cancellationToken)
     {
-        public string? Text { get; set; }
-        public List<OcrLinePayload> Lines { get; set; } = [];
+        using var image = source.Clone(region, PixelFormat.Format32bppArgb);
+        var bitmapRegion = new Rectangle(0, 0, image.Width, image.Height);
+        var bitmapData = image.LockBits(
+            bitmapRegion,
+            ImageLockMode.ReadOnly,
+            PixelFormat.Format32bppArgb);
+
+        try
+        {
+            var rowLength = checked(image.Width * 4);
+            var pixels = GC.AllocateUninitializedArray<byte>(checked(rowLength * image.Height));
+
+            for (var row = 0; row < image.Height; row++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var sourceRow = IntPtr.Add(bitmapData.Scan0, checked(row * bitmapData.Stride));
+                Marshal.Copy(sourceRow, pixels, row * rowLength, rowLength);
+            }
+
+            using var writer = new DataWriter();
+            writer.WriteBytes(pixels);
+            var buffer = writer.DetachBuffer();
+            return SoftwareBitmap.CreateCopyFromBuffer(
+                buffer,
+                BitmapPixelFormat.Bgra8,
+                image.Width,
+                image.Height,
+                BitmapAlphaMode.Ignore);
+        }
+        finally
+        {
+            image.UnlockBits(bitmapData);
+        }
     }
 
-    private sealed class OcrLinePayload
+    private static OcrDocument CreateDocument(
+        OcrResult result,
+        Rectangle region,
+        CancellationToken cancellationToken)
     {
-        public string? Text { get; set; }
-        public double X { get; set; }
-        public double Y { get; set; }
-        public double Width { get; set; }
-        public double Height { get; set; }
+        var lines = new List<OcrLine>(result.Lines.Count);
+        foreach (var line in result.Lines)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (line.Words.Count == 0)
+            {
+                continue;
+            }
+
+            var left = line.Words.Min(word => word.BoundingRect.X);
+            var top = line.Words.Min(word => word.BoundingRect.Y);
+            var right = line.Words.Max(word => word.BoundingRect.X + word.BoundingRect.Width);
+            var bottom = line.Words.Max(word => word.BoundingRect.Y + word.BoundingRect.Height);
+            lines.Add(new OcrLine(
+                line.Text,
+                left + region.X,
+                top + region.Y,
+                right - left,
+                bottom - top));
+        }
+
+        return new OcrDocument(result.Text, lines);
     }
 }

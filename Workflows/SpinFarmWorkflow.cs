@@ -1,14 +1,12 @@
 using System.Drawing;
-using ForzaFarm.Core;
-using ForzaFarm.Vision;
-using ForzaFarm.Windows;
+using FH6OpenAssist.Core;
+using FH6OpenAssist.Vision;
+using FH6OpenAssist.Windows;
 
-namespace ForzaFarm.Workflows;
+namespace FH6OpenAssist.Workflows;
 
 public sealed class SpinFarmWorkflow : IMacroWorkflow
 {
-    private const int StepSafetyMarginMilliseconds = 500;
-
     public MacroKind Kind => MacroKind.FarmarWheelspins;
 
     public async Task RunAsync(
@@ -68,127 +66,22 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         GameNavigator navigator,
         CancellationToken cancellationToken)
     {
-        await RestoreGarageHomeAsync(context, navigator, cancellationToken);
-        await RunTimedPurchaseMasteryAndSwitchAsync(context, cancellationToken);
-        context.Resources.AdjustCredits(-context.Settings.Spins.CreditsPerCar);
-        if (context.Resources.Current.SkillPoints is { } skillPoints)
-        {
-            context.Resources.SetSkillPoints(
-                Math.Max(0, skillPoints - context.Settings.Spins.SkillPointsPerCar),
-                estimated: true);
-        }
-    }
-
-    private static async Task RestoreGarageHomeAsync(
-        AutomationContext context,
-        GameNavigator navigator,
-        CancellationToken cancellationToken)
-    {
         const string workflow = "FarmarWheelspins";
         context.Logger.State(
             workflow,
-            "PaginaInicialGaragem",
-            "Saindo somente dos submenus abertos pela leitura e restaurando a aba Campanha com dois PgUp.");
-        await navigator.ReturnToGarageMenuAsync(cancellationToken);
-        await Task.Delay(703, cancellationToken);
-        await PulseTimedAsync(context, GameKey.PageUp, 109, 235, cancellationToken);
-        await PulseTimedAsync(context, GameKey.PageUp, 93, 0, cancellationToken);
-    }
+            "CicloVisual",
+            "Compra, Maestria, troca e remoção serão confirmadas visualmente em cada transição.");
 
-    private static async Task RunTimedPurchaseMasteryAndSwitchAsync(
-        AutomationContext context,
-        CancellationToken cancellationToken)
-    {
-        const string workflow = "FarmarWheelspins";
+        await OpenDealerAsync(context, navigator, cancellationToken);
+        await BuyMadMikeAsync(context, cancellationToken);
+        await UnlockMasteryAsync(context, navigator, cancellationToken);
+        await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
+        await RemoveMadMikeAsync(context, navigator, cancellationToken);
+
         context.Logger.State(
             workflow,
-            "CompraTemporizada",
-            "Executando compra, Maestria de 30 SP e troca de carro pelo fluxo Pulover calibrado.");
-
-        await Task.Delay(333, cancellationToken);
-        await Task.Delay(2_500, cancellationToken);
-        await PulseTimedAsync(context, GameKey.PageDown, 94, 100, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 109, 1_300, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Backspace, 110, 100, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 800, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Right, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Right, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Right, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 2_516, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 766, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 828, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 922, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 1_502, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 15_391, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Escape, 30, 875, cancellationToken);
-        await PulseTimedAsync(context, GameKey.PageDown, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Down, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 1_141, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 1_046, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Right, 30, 360, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 406, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Up, 30, 313, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 406, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Up, 30, 250, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 797, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Up, 30, 250, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 734, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Up, 30, 234, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 1_203, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Right, 30, 297, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 297, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Escape, 30, 1_016, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Escape, 30, 922, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Up, 30, 60, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 2_015, cancellationToken);
-        await PulseTimedAsync(context, GameKey.PageDown, 30, 297, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 703, cancellationToken);
-        await PulseTimedAsync(context, GameKey.Enter, 30, 1_203, cancellationToken);
-    }
-
-    private static async Task PulseTimedAsync(
-        AutomationContext context,
-        GameKey key,
-        int holdMilliseconds,
-        int waitAfterMilliseconds,
-        CancellationToken cancellationToken)
-    {
-        await context.Input.KeyDownAsync(key, cancellationToken);
-        try
-        {
-            await Task.Delay(holdMilliseconds, cancellationToken);
-        }
-        finally
-        {
-            await context.Input.KeyUpAsync(key, CancellationToken.None);
-        }
-
-        if (waitAfterMilliseconds > 0)
-        {
-            await Task.Delay(
-                waitAfterMilliseconds + StepSafetyMarginMilliseconds,
-                cancellationToken);
-        }
+            "CicloVisualConcluido",
+            "Mad Mike comprado, Maestria confirmada, outro carro ativado e Mad Mike removido.");
     }
 
     private static async Task OpenDealerAsync(
@@ -334,6 +227,18 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
     {
         const string workflow = "FarmarWheelspins";
         var mastery = await navigator.OpenMasteryAndReadAsync(cancellationToken);
+        var normalizedCar = GameVisionService.Normalize(mastery.OcrText);
+        if (!normalizedCar.Contains("MAD MIKE", StringComparison.Ordinal))
+        {
+            throw new CalibrationRequiredException(
+                "A tela de Maestria não confirmou que o carro atual é o Mad Mike. " +
+                "Nenhum ponto de habilidade foi gasto.");
+        }
+
+        context.Logger.State(
+            workflow,
+            "ConfirmarMadMikeNaMaestria",
+            "Mad Mike confirmado pelo OCR antes de gastar pontos de habilidade.");
         if (mastery.SkillPoints < context.Settings.Spins.SkillPointsPerCar)
         {
             throw new AutomationFaultException(
@@ -399,10 +304,20 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             cancellationToken);
         // Entrar no Carro é a primeira opção e já vem focada.
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
-        await context.Vision.WaitForAnyTextAsync(
+        await WaitForTextToDisappearAsync(
+            context,
+            "TrocaDeCarroIniciada",
+            ["ENTRAR NO CARRO"],
+            TimeSpan.FromSeconds(30),
+            cancellationToken);
+        context.Logger.State(
+            workflow,
+            "AguardarTrocaDeCarro",
+            "Aguardando a grade fechar e a opção Aprimorar e Tunar reaparecer na aba Carros.");
+        _ = await context.Vision.WaitForAnyTextAsync(
             workflow,
             "OutroCarroConfirmado",
-            ["MEUS CARROS", "APRIMORAR E TUNAR"],
+            ["APRIMORAR E TUNAR"],
             cancellationToken,
             TimeSpan.FromMinutes(2));
     }
@@ -413,19 +328,11 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         CancellationToken cancellationToken)
     {
         const string workflow = "FarmarWheelspins";
-        if (await context.Vision.ContainsAnyTextAsync(
-                ["CARRO ATUAL", "IR PARA FABRICANTE"],
-                cancellationToken))
-        {
-            context.Logger.State(
-                workflow,
-                "RemoverCarro",
-                "Fluxo temporizado terminou em Meus Carros; iniciando a venda identificada.");
-        }
-        else
-        {
-            await OpenMyCarsAsync(context, navigator, "RemoverCarro", cancellationToken);
-        }
+        context.Logger.State(
+            workflow,
+            "RemoverCarro",
+            "Normalizando o estado atual e abrindo Meus Carros antes da remoção identificada.");
+        await OpenMyCarsAsync(context, navigator, "RemoverCarro", cancellationToken);
         await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
             workflow,
@@ -485,6 +392,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         // A confirmação abre em Não; descer uma posição seleciona Sim.
         await context.Input.TapAsync(GameKey.Down, cancellationToken);
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
+        await WaitForTextToDisappearAsync(
+            context,
+            "RemocaoProcessada",
+            ["QUER MESMO REMOVER"],
+            TimeSpan.FromSeconds(20),
+            cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
             workflow,
             "RemocaoConcluida",
@@ -492,6 +405,43 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             cancellationToken,
             TimeSpan.FromSeconds(20));
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
+    }
+
+    private static async Task WaitForTextToDisappearAsync(
+        AutomationContext context,
+        string state,
+        IReadOnlyCollection<string> texts,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        const string workflow = "FarmarWheelspins";
+        var deadline = DateTime.UtcNow + timeout;
+        var consecutiveMisses = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await context.Vision.ContainsAnyTextAsync(texts, cancellationToken))
+            {
+                consecutiveMisses = 0;
+            }
+            else
+            {
+                consecutiveMisses++;
+                if (consecutiveMisses >= 2)
+                {
+                    context.Logger.State(
+                        workflow,
+                        state,
+                        $"Texto anterior desapareceu de duas capturas consecutivas: [{string.Join(" | ", texts)}].");
+                    return;
+                }
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+
+        throw new CalibrationRequiredException(
+            $"A transição '{state}' não foi confirmada: [{string.Join(" | ", texts)}] permaneceu visível.");
     }
 
     private static async Task OpenMyCarsAsync(

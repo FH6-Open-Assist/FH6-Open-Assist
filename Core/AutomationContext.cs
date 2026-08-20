@@ -1,7 +1,7 @@
-using ForzaFarm.Vision;
-using ForzaFarm.Windows;
+using FH6OpenAssist.Vision;
+using FH6OpenAssist.Windows;
 
-namespace ForzaFarm.Core;
+namespace FH6OpenAssist.Core;
 
 public sealed record MacroRunRequest(
     MacroKind Kind,
@@ -17,6 +17,9 @@ public sealed class AutomationContext
     public required GameInputService Input { get; init; }
     public required GameCaptureService Capture { get; init; }
     public required GameVisionService Vision { get; init; }
+    public required GameContextDetector GameContext { get; init; }
+    public required CrPositionClassifier CrPosition { get; init; }
+    public required CrFarmSampleCollector CrFarmSamples { get; init; }
     public required ResourceTracker Resources { get; init; }
     public required Func<MacroRunRequest, CancellationToken, Task> RunNestedAsync { get; set; }
 }

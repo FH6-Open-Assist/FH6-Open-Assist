@@ -1,0 +1,723 @@
+{
+  "schemaVersion": 1,
+  "task": "cr-position-validity",
+  "model": {
+    "file": "cr-position.onnx",
+    "format": "ONNX",
+    "opset": 18,
+    "architecture": "custom-depthwise-spatial-cnn",
+    "parameters": 12806,
+    "sizeBytes": 92221
+  },
+  "input": {
+    "name": "image",
+    "shape": [
+      1,
+      3,
+      96,
+      160
+    ],
+    "layout": "NCHW",
+    "dataType": "float32",
+    "colorOrder": "RGB",
+    "cropNormalized": {
+      "x": 0.18,
+      "y": 0.18,
+      "width": 0.68,
+      "height": 0.82
+    },
+    "cropRounding": "nearest, then clamp to image bounds",
+    "resize": {
+      "width": 160,
+      "height": 96,
+      "mode": "bilinear"
+    },
+    "scale": "uint8 / 255",
+    "normalization": {
+      "mean": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "std": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    }
+  },
+  "output": {
+    "name": "logits",
+    "shape": [
+      1,
+      2
+    ],
+    "classes": [
+      "Invalid",
+      "Valid"
+    ],
+    "activation": "softmax outside the model",
+    "validClassIndex": 1
+  },
+  "decision": {
+    "validAtOrAbove": 0.9,
+    "invalidAtOrBelow": 0.2,
+    "betweenThresholds": "Unknown",
+    "policy": "Somente Valid autoriza execução; Invalid ou Unknown interrompem o fluxo.",
+    "thresholdStatus": "conservative-bootstrap; collect more independent groups"
+  },
+  "dataset": {
+    "root": "ExemplosPosition/Dataset",
+    "samples": {
+      "Invalid": 19,
+      "Valid": 20
+    },
+    "groups": {
+      "Invalid": 7,
+      "Valid": 8
+    },
+    "totalSamples": 39,
+    "totalGroups": 15,
+    "split": {
+      "strategy": "grouped-holdout-by-origin-or-attempt",
+      "groupConvention": "<attempt-id>__<frame-id> or filename stem",
+      "validationFractionRequested": 0.2,
+      "trainingGroups": [
+        "20260820-014757594-0f3c89b67ccb",
+        "20260820-020113924-0b960d646ae7",
+        "20260820-022356641-d3a89f319f01",
+        "20260820-040052841-55caacc67b20",
+        "20260820-043536494-94040ddf9615",
+        "20260820-053232716-3006c59376eb",
+        "20260820-055612532-5a3a49785d91",
+        "20260820-060216711-80d4ad145535",
+        "20260820-061111901-2cb001525c27",
+        "20260820-062109479-eccb32691fb8",
+        "not_valid",
+        "valid_risk"
+      ],
+      "validationGroups": [
+        "20260820-013118430-a1ffb802ae47",
+        "20260820-055421870-10781f04e6a7",
+        "valid"
+      ],
+      "validationClasses": [
+        "Invalid",
+        "Valid"
+      ],
+      "completeClassCoverage": true,
+      "canMeasureFalsePositives": true,
+      "canMeasureFalseNegatives": true
+    }
+  },
+  "training": {
+    "seed": 20260820,
+    "cpuThreads": 2,
+    "optimizer": "AdamW",
+    "learningRate": 0.003,
+    "weightDecay": 0.001,
+    "loss": "weighted cross entropy with label smoothing 0.03",
+    "falsePositiveCost": 3.0,
+    "augmentation": {
+      "brightness": [
+        0.86,
+        1.14
+      ],
+      "contrast": [
+        0.88,
+        1.12
+      ],
+      "saturation": [
+        0.92,
+        1.08
+      ],
+      "rotationDegrees": [
+        -1.5,
+        1.5
+      ],
+      "translationFraction": [
+        -0.015,
+        0.015
+      ],
+      "gaussianBlurProbability": 0.15,
+      "forbidden": [
+        "horizontal flip",
+        "vertical flip",
+        "MixUp",
+        "CutMix"
+      ]
+    },
+    "finalModel": {
+      "epochs": 60,
+      "repeatsPerOrigin": 32,
+      "batchSize": 16,
+      "finalLoss": 0.07732555590187892,
+      "minimumLoss": 0.07679362112703995,
+      "elapsedSeconds": 117.7129028000054
+    }
+  },
+  "metrics": {
+    "holdout": {
+      "available": true,
+      "coverage": {
+        "strategy": "grouped-holdout-by-origin-or-attempt",
+        "groupConvention": "<attempt-id>__<frame-id> or filename stem",
+        "validationFractionRequested": 0.2,
+        "trainingGroups": [
+          "20260820-014757594-0f3c89b67ccb",
+          "20260820-020113924-0b960d646ae7",
+          "20260820-022356641-d3a89f319f01",
+          "20260820-040052841-55caacc67b20",
+          "20260820-043536494-94040ddf9615",
+          "20260820-053232716-3006c59376eb",
+          "20260820-055612532-5a3a49785d91",
+          "20260820-060216711-80d4ad145535",
+          "20260820-061111901-2cb001525c27",
+          "20260820-062109479-eccb32691fb8",
+          "not_valid",
+          "valid_risk"
+        ],
+        "validationGroups": [
+          "20260820-013118430-a1ffb802ae47",
+          "20260820-055421870-10781f04e6a7",
+          "valid"
+        ],
+        "validationClasses": [
+          "Invalid",
+          "Valid"
+        ],
+        "completeClassCoverage": true,
+        "canMeasureFalsePositives": true,
+        "canMeasureFalseNegatives": true
+      },
+      "training": {
+        "epochs": 60,
+        "repeatsPerOrigin": 32,
+        "batchSize": 16,
+        "finalLoss": 0.07384255842771381,
+        "minimumLoss": 0.07357201451668516,
+        "elapsedSeconds": 98.43109269998968
+      },
+      "results": {
+        "sampleCount": 7,
+        "argmaxAccuracy": 1.0,
+        "confusionMatrix": {
+          "rows": [
+            "Invalid",
+            "Valid"
+          ],
+          "columns": [
+            "Invalid",
+            "Valid"
+          ],
+          "values": [
+            [
+              3,
+              0
+            ],
+            [
+              0,
+              4
+            ]
+          ]
+        },
+        "decisionThresholds": {
+          "validAtOrAbove": 0.9,
+          "invalidAtOrBelow": 0.2
+        },
+        "decisionCounts": {
+          "Invalid": 3,
+          "Valid": 4,
+          "Unknown": 0
+        },
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "samples": [
+          {
+            "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame01.jpg",
+            "group": "20260820-013118430-a1ffb802ae47",
+            "groundTruth": "Invalid",
+            "probabilityInvalid": 0.99599034,
+            "probabilityValid": 0.00400969,
+            "argmax": "Invalid",
+            "decision": "Invalid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame02.jpg",
+            "group": "20260820-013118430-a1ffb802ae47",
+            "groundTruth": "Invalid",
+            "probabilityInvalid": 0.99581581,
+            "probabilityValid": 0.00418422,
+            "argmax": "Invalid",
+            "decision": "Invalid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame03.jpg",
+            "group": "20260820-013118430-a1ffb802ae47",
+            "groundTruth": "Invalid",
+            "probabilityInvalid": 0.99831259,
+            "probabilityValid": 0.00168746,
+            "argmax": "Invalid",
+            "decision": "Invalid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame01.jpg",
+            "group": "20260820-055421870-10781f04e6a7",
+            "groundTruth": "Valid",
+            "probabilityInvalid": 0.03030538,
+            "probabilityValid": 0.96969461,
+            "argmax": "Valid",
+            "decision": "Valid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame02.jpg",
+            "group": "20260820-055421870-10781f04e6a7",
+            "groundTruth": "Valid",
+            "probabilityInvalid": 0.03853051,
+            "probabilityValid": 0.96146953,
+            "argmax": "Valid",
+            "decision": "Valid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame03.jpg",
+            "group": "20260820-055421870-10781f04e6a7",
+            "groundTruth": "Valid",
+            "probabilityInvalid": 0.04688995,
+            "probabilityValid": 0.9531101,
+            "argmax": "Valid",
+            "decision": "Valid"
+          },
+          {
+            "file": "ExemplosPosition/Dataset/Valid/valid.png",
+            "group": "valid",
+            "groundTruth": "Valid",
+            "probabilityInvalid": 0.0751958,
+            "probabilityValid": 0.92480427,
+            "argmax": "Valid",
+            "decision": "Valid"
+          }
+        ]
+      },
+      "warning": "Holdout agrupado pequeno, com uma origem independente por classe. Mede esta amostra de validação, mas ainda não estima generalização."
+    },
+    "resubstitution": {
+      "sampleCount": 39,
+      "argmaxAccuracy": 1.0,
+      "confusionMatrix": {
+        "rows": [
+          "Invalid",
+          "Valid"
+        ],
+        "columns": [
+          "Invalid",
+          "Valid"
+        ],
+        "values": [
+          [
+            19,
+            0
+          ],
+          [
+            0,
+            20
+          ]
+        ]
+      },
+      "decisionThresholds": {
+        "validAtOrAbove": 0.9,
+        "invalidAtOrBelow": 0.2
+      },
+      "decisionCounts": {
+        "Invalid": 19,
+        "Valid": 20,
+        "Unknown": 0
+      },
+      "falsePositives": 0,
+      "falseNegatives": 0,
+      "samples": [
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame01.jpg",
+          "group": "20260820-013118430-a1ffb802ae47",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99669409,
+          "probabilityValid": 0.0033059,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame02.jpg",
+          "group": "20260820-013118430-a1ffb802ae47",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99625456,
+          "probabilityValid": 0.00374543,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-013118430-a1ffb802ae47-frame03.jpg",
+          "group": "20260820-013118430-a1ffb802ae47",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99578685,
+          "probabilityValid": 0.0042131,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-014757594-0f3c89b67ccb__frame01.jpg",
+          "group": "20260820-014757594-0f3c89b67ccb",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99694163,
+          "probabilityValid": 0.00305838,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-014757594-0f3c89b67ccb__frame02.jpg",
+          "group": "20260820-014757594-0f3c89b67ccb",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.9964065,
+          "probabilityValid": 0.0035935,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-014757594-0f3c89b67ccb__frame03.jpg",
+          "group": "20260820-014757594-0f3c89b67ccb",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99618226,
+          "probabilityValid": 0.00381769,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-020113924-0b960d646ae7__frame01.jpg",
+          "group": "20260820-020113924-0b960d646ae7",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99771887,
+          "probabilityValid": 0.00228112,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-020113924-0b960d646ae7__frame02.jpg",
+          "group": "20260820-020113924-0b960d646ae7",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99722338,
+          "probabilityValid": 0.00277668,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-020113924-0b960d646ae7__frame03.jpg",
+          "group": "20260820-020113924-0b960d646ae7",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99748009,
+          "probabilityValid": 0.00251998,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-040052841-55caacc67b20__frame01.jpg",
+          "group": "20260820-040052841-55caacc67b20",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99543494,
+          "probabilityValid": 0.00456506,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-040052841-55caacc67b20__frame02.jpg",
+          "group": "20260820-040052841-55caacc67b20",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99669802,
+          "probabilityValid": 0.00330199,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-040052841-55caacc67b20__frame03.jpg",
+          "group": "20260820-040052841-55caacc67b20",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.996252,
+          "probabilityValid": 0.003748,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-043536494-94040ddf9615__frame01.jpg",
+          "group": "20260820-043536494-94040ddf9615",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99731749,
+          "probabilityValid": 0.00268252,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-043536494-94040ddf9615__frame02.jpg",
+          "group": "20260820-043536494-94040ddf9615",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99741238,
+          "probabilityValid": 0.0025876,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-043536494-94040ddf9615__frame03.jpg",
+          "group": "20260820-043536494-94040ddf9615",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99716264,
+          "probabilityValid": 0.00283737,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-060216711-80d4ad145535__frame01.jpg",
+          "group": "20260820-060216711-80d4ad145535",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99612612,
+          "probabilityValid": 0.00387387,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-060216711-80d4ad145535__frame02.jpg",
+          "group": "20260820-060216711-80d4ad145535",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99615061,
+          "probabilityValid": 0.00384943,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/20260820-060216711-80d4ad145535__frame03.jpg",
+          "group": "20260820-060216711-80d4ad145535",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99682403,
+          "probabilityValid": 0.00317594,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Invalid/not_valid.png",
+          "group": "not_valid",
+          "groundTruth": "Invalid",
+          "probabilityInvalid": 0.99643588,
+          "probabilityValid": 0.00356412,
+          "argmax": "Invalid",
+          "decision": "Invalid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-022356641-d3a89f319f01__frame01.jpg",
+          "group": "20260820-022356641-d3a89f319f01",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.0457653,
+          "probabilityValid": 0.95423472,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-022356641-d3a89f319f01__frame02.jpg",
+          "group": "20260820-022356641-d3a89f319f01",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04681737,
+          "probabilityValid": 0.9531827,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-022356641-d3a89f319f01__frame03.jpg",
+          "group": "20260820-022356641-d3a89f319f01",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04525557,
+          "probabilityValid": 0.95474446,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-053232716-3006c59376eb__frame01.jpg",
+          "group": "20260820-053232716-3006c59376eb",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.0497415,
+          "probabilityValid": 0.95025843,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-053232716-3006c59376eb__frame02.jpg",
+          "group": "20260820-053232716-3006c59376eb",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04363254,
+          "probabilityValid": 0.95636749,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-053232716-3006c59376eb__frame03.jpg",
+          "group": "20260820-053232716-3006c59376eb",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04509987,
+          "probabilityValid": 0.95490015,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame01.jpg",
+          "group": "20260820-055421870-10781f04e6a7",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04262667,
+          "probabilityValid": 0.95737326,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame02.jpg",
+          "group": "20260820-055421870-10781f04e6a7",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04347787,
+          "probabilityValid": 0.95652211,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055421870-10781f04e6a7__frame03.jpg",
+          "group": "20260820-055421870-10781f04e6a7",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04569625,
+          "probabilityValid": 0.9543038,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055612532-5a3a49785d91__frame01.jpg",
+          "group": "20260820-055612532-5a3a49785d91",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04484043,
+          "probabilityValid": 0.9551596,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055612532-5a3a49785d91__frame02.jpg",
+          "group": "20260820-055612532-5a3a49785d91",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04858167,
+          "probabilityValid": 0.95141834,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-055612532-5a3a49785d91__frame03.jpg",
+          "group": "20260820-055612532-5a3a49785d91",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04672982,
+          "probabilityValid": 0.9532702,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-061111901-2cb001525c27__frame01.jpg",
+          "group": "20260820-061111901-2cb001525c27",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04462437,
+          "probabilityValid": 0.95537567,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-061111901-2cb001525c27__frame02.jpg",
+          "group": "20260820-061111901-2cb001525c27",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04856941,
+          "probabilityValid": 0.95143056,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-061111901-2cb001525c27__frame03.jpg",
+          "group": "20260820-061111901-2cb001525c27",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04400727,
+          "probabilityValid": 0.95599276,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-062109479-eccb32691fb8__frame01.jpg",
+          "group": "20260820-062109479-eccb32691fb8",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04612833,
+          "probabilityValid": 0.95387167,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-062109479-eccb32691fb8__frame02.jpg",
+          "group": "20260820-062109479-eccb32691fb8",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04730698,
+          "probabilityValid": 0.95269305,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/20260820-062109479-eccb32691fb8__frame03.jpg",
+          "group": "20260820-062109479-eccb32691fb8",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04707922,
+          "probabilityValid": 0.95292073,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/valid.png",
+          "group": "valid",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04665824,
+          "probabilityValid": 0.95334178,
+          "argmax": "Valid",
+          "decision": "Valid"
+        },
+        {
+          "file": "ExemplosPosition/Dataset/Valid/valid_risk.png",
+          "group": "valid_risk",
+          "groundTruth": "Valid",
+          "probabilityInvalid": 0.04539833,
+          "probabilityValid": 0.95460165,
+          "argmax": "Valid",
+          "decision": "Valid"
+        }
+      ],
+      "warning": "Métrica de ressubstituição nas mesmas origens usadas no treino; comprova somente ajuste/exportação e não mede generalização."
+    },
+    "onnxEquivalence": {
+      "samplesCompared": 39,
+      "rtol": 0.0001,
+      "atol": 1e-05,
+      "maximumAbsoluteError": 1.430511474609375e-06,
+      "maximumRelativeError": 5.880414164494141e-07,
+      "passed": true
+    },
+    "latency": {
+      "scope": "ONNX inference only; capture and preprocessing excluded",
+      "provider": "CPUExecutionProvider",
+      "intraOpThreads": 1,
+      "interOpThreads": 1,
+      "executionMode": "sequential",
+      "threadSpinning": false,
+      "warmupRuns": 30,
+      "measuredRuns": 300,
+      "medianMilliseconds": 0.0643,
+      "p95Milliseconds": 0.1,
+      "minimumMilliseconds": 0.0634,
+      "maximumMilliseconds": 0.2375
+    },
+    "honestConclusion": "O modelo foi treinado e exportado de verdade com 15 origens agrupadas, ainda insuficientes para alegar generalização. Colete novas tentativas e mantenha todos os frames de cada tentativa no mesmo grupo."
+  },
+  "runtime": {
+    "validatedExecutionProvider": "CPUExecutionProvider",
+    "recommendedExecutionProvider": "CPUExecutionProvider",
+    "recommendedThreads": 1,
+    "sessionLifetime": "single persistent session",
+    "inferenceCadence": "only at CR-position decision points, never continuous polling"
+  }
+}

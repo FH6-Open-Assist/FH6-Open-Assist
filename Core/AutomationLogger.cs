@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ForzaFarm.Core;
+namespace FH6OpenAssist.Core;
 
 public sealed class AutomationLogger : IDisposable
 {

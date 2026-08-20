@@ -91,6 +91,7 @@ public sealed class AutomationCoordinator : IAsyncDisposable
             if (_activeTask is null || _activeTask.IsCompleted)
             {
                 await _context.Input.ReleaseAllAsync();
+                await _context.Capture.ReleaseSessionAsync();
                 ChangeState(SelectedMacro is null ? MacroRunState.Parado : MacroRunState.Armado, "Nenhum macro está executando.");
                 return;
             }
@@ -154,6 +155,7 @@ public sealed class AutomationCoordinator : IAsyncDisposable
         finally
         {
             await _context.Input.ReleaseAllAsync();
+            await _context.Capture.ReleaseSessionAsync();
         }
     }
 

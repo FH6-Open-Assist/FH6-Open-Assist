@@ -9,7 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
-$projectPath = Join-Path $projectRoot "ForzaFarm.csproj"
+$projectPath = Join-Path $projectRoot "FH6OpenAssist.csproj"
 $installerScript = Join-Path $projectRoot "installer\FH6OpenAssist.iss"
 $resolvedOutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 $releaseVersion = $Version -replace '^v(?=\d)', ''

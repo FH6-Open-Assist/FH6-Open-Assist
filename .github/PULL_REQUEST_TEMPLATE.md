@@ -9,7 +9,7 @@ Informe os passos executados e, quando aplicável, a tela inicial esperada no jo
 ## Checklist
 
 - [ ] Mantive a alteração restrita ao objetivo do PR.
-- [ ] Executei `dotnet build .\ForzaFarm.csproj -c Release` com sucesso.
+- [ ] Executei `dotnet build .\FH6OpenAssist.csproj -c Release` com sucesso.
 - [ ] Atualizei instruções ou tempos calibrados afetados pela mudança.
 - [ ] Não incluí credenciais, tokens, logs pessoais ou imagens com dados sensíveis.
 - [ ] Testei no Forza Horizon 6, quando a alteração depende do fluxo do jogo.

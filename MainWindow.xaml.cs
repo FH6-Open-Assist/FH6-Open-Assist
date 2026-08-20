@@ -8,6 +8,7 @@ using FH6OpenAssist.Windows;
 using FH6OpenAssist.Workflows;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -31,6 +32,7 @@ public sealed partial class MainWindow : Window
     private readonly AutomationLogger _logger;
     private readonly GameInputService _input;
     private readonly GameCaptureService _capture;
+    private readonly CrPositionClassifier _crPosition;
     private readonly ResourceTracker _resources;
     private readonly AutomationCoordinator _coordinator;
     private readonly GlobalHotkeyService _hotkeys;
@@ -40,6 +42,8 @@ public sealed partial class MainWindow : Window
     private bool _updatingControls;
     private bool _isInitializingSelection;
     private bool _reduceMotion;
+    private bool _shutdownStarted;
+    private bool _shutdownComplete;
     private MacroKind _selectedMacro = MacroKind.FarmarSp;
     private InputMode _selectedInputMode = InputMode.Foreground;
     private static readonly Dictionary<string, ImageSource> GrayscaleImageCache = new();
@@ -76,6 +80,9 @@ public sealed partial class MainWindow : Window
         _capture = new GameCaptureService(gameWindow, _settings, _logger);
         var ocr = new WindowsOcrService(_settings);
         var vision = new GameVisionService(_capture, ocr, _input, _settings, _logger);
+        var gameContext = new GameContextDetector(vision, _logger);
+        _crPosition = new CrPositionClassifier(_settings, _logger);
+        var crFarmSamples = new CrFarmSampleCollector(_settings, _logger);
         _resources = new ResourceTracker();
         var context = new AutomationContext
         {
@@ -85,6 +92,9 @@ public sealed partial class MainWindow : Window
             Input = _input,
             Capture = _capture,
             Vision = vision,
+            GameContext = gameContext,
+            CrPosition = _crPosition,
+            CrFarmSamples = crFarmSamples,
             Resources = _resources,
             RunNestedAsync = (_, _) => Task.CompletedTask
         };
@@ -105,7 +115,7 @@ public sealed partial class MainWindow : Window
         _hotkeys.AppWindow.Resize(new SizeInt32(1180, 780));
         _hotkeys.ToggleRequested += () => _dispatcherQueue.TryEnqueue(ToggleMacro);
         _hotkeys.EndRequested += () => _dispatcherQueue.TryEnqueue(EndMacro);
-        Closed += MainWindow_Closed;
+        _hotkeys.AppWindow.Closing += MainWindow_Closing;
     }
 
     private async void MainContent_Loaded(object sender, RoutedEventArgs e)
@@ -221,11 +231,21 @@ public sealed partial class MainWindow : Window
             WheelspinMacroImageOverlay,
             WheelspinMacroImageGlint);
 
+        _botCards[MacroKind.GastarWheelspins] = new BotCardVisuals(
+            MacroKind.GastarWheelspins,
+            SpendWheelspinMacro,
+            SpendWheelspinBotImageFrame,
+            SpendWheelspinMacroImageGray,
+            SpendWheelspinMacroImageColor,
+            SpendWheelspinMacroImageOverlay,
+            SpendWheelspinMacroImageGlint);
+
         try
         {
             SpMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/Skill_Points.png");
             CrMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/CR_Icon.png");
             WheelspinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
+            SpendWheelspinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
         }
         catch (Exception exception)
         {
@@ -245,7 +265,21 @@ public sealed partial class MainWindow : Window
 
     private static async Task<ImageSource> LoadAndGrayscaleAssetAsync(string assetPath)
     {
-        var file = await StorageFile.GetFileFromApplicationUriAsync(new Uri(assetPath));
+        const string appPrefix = "ms-appx:///";
+        if (!assetPath.StartsWith(appPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("O asset deve usar o prefixo ms-appx:///.", nameof(assetPath));
+        }
+
+        var relativePath = assetPath[appPrefix.Length..].Replace('/', Path.DirectorySeparatorChar);
+        var applicationDirectory = Path.GetFullPath(AppContext.BaseDirectory);
+        var fullPath = Path.GetFullPath(Path.Combine(applicationDirectory, relativePath));
+        if (!fullPath.StartsWith(applicationDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("O asset calculado ficou fora da pasta da aplicação.");
+        }
+
+        var file = await StorageFile.GetFileFromPathAsync(fullPath);
         using var sourceStream = await file.OpenReadAsync();
         var decoder = await BitmapDecoder.CreateAsync(sourceStream);
         var data = await decoder.GetPixelDataAsync(
@@ -462,8 +496,8 @@ public sealed partial class MainWindow : Window
 
         var previous = _selectedMacro;
         _selectedMacro = kind;
-        await AnimateMacroSelectionTransitionAsync(previous, kind);
         _coordinator.Select(kind);
+        await AnimateMacroSelectionTransitionAsync(previous, kind);
     }
 
     private void ActivateBotButton_Click(object sender, RoutedEventArgs e) => _coordinator.ArmSelected();
@@ -664,18 +698,45 @@ public sealed partial class MainWindow : Window
 
     private void ClearLog_Click(object sender, RoutedEventArgs e) => LogTextBox.Text = string.Empty;
 
-    private async void MainWindow_Closed(object sender, WindowEventArgs args)
+    private async void MainWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        if (_shutdownComplete)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        if (_shutdownStarted)
+        {
+            return;
+        }
+
+        _shutdownStarted = true;
         _botAnimationCancellation?.Cancel();
         _botAnimationCancellation?.Dispose();
         MainContent.ActualThemeChanged -= MainContent_ActualThemeChanged;
         _hotkeys.Dispose();
         _resources.Changed -= Resources_Changed;
-        await _coordinator.DisposeAsync();
-        _input.BackgroundInputAvailabilityChanged -= Input_BackgroundInputAvailabilityChanged;
-        _input.Dispose();
-        _capture.Dispose();
-        _logger.Dispose();
+        try
+        {
+            await _coordinator.DisposeAsync();
+        }
+        catch (Exception exception)
+        {
+            _logger.Error($"Falha ao liberar a automação durante o fechamento: {exception.Message}");
+        }
+        finally
+        {
+            _input.BackgroundInputAvailabilityChanged -= Input_BackgroundInputAvailabilityChanged;
+            _input.Dispose();
+            _capture.Dispose();
+            _crPosition.Dispose();
+            _logger.Dispose();
+        }
+
+        _shutdownComplete = true;
+        sender.Closing -= MainWindow_Closing;
+        Close();
     }
 
     private void SavePreferences()
@@ -748,7 +809,7 @@ public sealed partial class MainWindow : Window
     private void ApplyInputModeDescription(InputMode mode)
     {
         InputModeDescription.Text = mode == InputMode.Foreground
-            ? "Recomendado. Traz o Forza para frente e usa somente teclado e mouse nativos do Windows."
+            ? "Recomendado. Traz o Forza para frente; os demais BOTs usam teclado e mouse nativos, mas o Farm de CR também usa o controle virtual no ajuste analógico."
             : "Mantém o foco atual e usa captura WGC + controle Xbox virtual validado. O jogo não pode ficar minimizado.";
     }
 
@@ -777,7 +838,7 @@ public sealed partial class MainWindow : Window
         ViGEmStatusDot.Fill = ThemeBrush(available ? "StatusRunningBrush" : "StatusWarningBrush");
         ViGEmStatusText.Text = available
             ? "ViGEm conectado · segundo plano disponível"
-            : "ViGEm não conectado · use primeiro plano ou tente novamente";
+            : "ViGEm não conectado · Farm de CR indisponível; demais BOTs podem usar primeiro plano";
     }
 
     private void UpdateInputModeControlsAvailability()
@@ -805,6 +866,7 @@ public sealed partial class MainWindow : Window
                 {
                     "Desative todas as assistências.",
                     "Defina a dificuldade como Imbatível.",
+                    "O ajuste fino usa aceleração analógica; mantenha o ViGEmBus instalado mesmo em primeiro plano.",
                     "Vá para a rua; não inicie dentro da garagem."
                 }),
             MacroKind.FarmarWheelspins => (
@@ -814,6 +876,14 @@ public sealed partial class MainWindow : Window
                     "A conta precisa ser VIP.",
                     "Tenha mais de 100.000 CR e mais de 30 SP.",
                     "Fique na garagem, no menu Campanha."
+                }),
+            MacroKind.GastarWheelspins => (
+                "Comece na rua, no menu de pausa ou em uma tela de Wheelspin.",
+                new[]
+                {
+                    "O BOT prioriza Super Wheelspins e só gira após duas confirmações OCR.",
+                    "Saldo zero encerra sem tentativa de giro ou compra com créditos.",
+                    "Carros duplicados são mantidos; vender ou presentear nunca é escolhido automaticamente."
                 }),
             _ => (
                 "Prepare o jogo conforme a calibração do BOT.",

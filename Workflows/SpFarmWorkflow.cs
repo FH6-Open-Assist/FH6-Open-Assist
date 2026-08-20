@@ -1,9 +1,9 @@
 using System.Drawing;
-using ForzaFarm.Core;
-using ForzaFarm.Vision;
-using ForzaFarm.Windows;
+using FH6OpenAssist.Core;
+using FH6OpenAssist.Vision;
+using FH6OpenAssist.Windows;
 
-namespace ForzaFarm.Workflows;
+namespace FH6OpenAssist.Workflows;
 
 public sealed class SpFarmWorkflow : IMacroWorkflow
 {
@@ -22,7 +22,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             $"Início rápido na rua: Impreza 22B e Assistência Total são pré-requisitos. " +
             "Execução contínua até F8, sem estimar o saldo total de SP.");
 
-        await OpenEventLabChallengeAsync(context, cancellationToken);
+        await OpenEventLabChallengeWithVisionAsync(context, cancellationToken);
         await RunRaceLoopAsync(context, cancellationToken);
     }
 
@@ -71,15 +71,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
         int waitAfterMilliseconds,
         CancellationToken cancellationToken)
     {
-        await context.Input.KeyDownAsync(key, cancellationToken);
-        try
-        {
-            await Task.Delay(holdMilliseconds, cancellationToken);
-        }
-        finally
-        {
-            await context.Input.KeyUpAsync(key, CancellationToken.None);
-        }
+        await context.Input.HoldAsync(key, holdMilliseconds, cancellationToken);
 
         if (waitAfterMilliseconds > 0)
         {
@@ -115,15 +107,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
                         workflow,
                         "SairDaEntradaDaCasa",
                         "A entrada da casa interceptou Esc; avançando com RT antes da próxima tentativa.");
-                    try
-                    {
-                        await context.Input.KeyDownAsync(GameKey.W, cancellationToken);
-                        await Task.Delay(2_000, cancellationToken);
-                    }
-                    finally
-                    {
-                        await context.Input.KeyUpAsync(GameKey.W, CancellationToken.None);
-                    }
+                    await context.Input.HoldAsync(GameKey.W, 2_000, cancellationToken);
                     await Task.Delay(2_500, cancellationToken);
                 }
 
@@ -283,15 +267,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
                 $"Corrida {race}: sequência temporizada, sem captura contínua da tela.");
             await Task.Delay(333, cancellationToken);
             await Task.Delay(15_859, cancellationToken);
-            await context.Input.KeyDownAsync(GameKey.W, cancellationToken);
-            try
-            {
-                await Task.Delay(37_500, cancellationToken);
-            }
-            finally
-            {
-                await context.Input.KeyUpAsync(GameKey.W, CancellationToken.None);
-            }
+            await context.Input.HoldAsync(GameKey.W, 37_500, cancellationToken);
 
             await Task.Delay(2_016, cancellationToken);
             earnedPoints += context.Settings.Sp.PointsPerRace;
@@ -304,15 +280,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
                 workflow,
                 "TentarNovamente",
                 "Resultado já está pronto pelo temporizador; pressionando Esc por 156 ms para tentar novamente.");
-            await context.Input.KeyDownAsync(GameKey.Escape, cancellationToken);
-            try
-            {
-                await Task.Delay(156, cancellationToken);
-            }
-            finally
-            {
-                await context.Input.KeyUpAsync(GameKey.Escape, CancellationToken.None);
-            }
+            await context.Input.TapAsync(GameKey.Escape, cancellationToken, 156);
             race++;
         }
     }

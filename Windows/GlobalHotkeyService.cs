@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 
-namespace ForzaFarm.Windows;
+namespace FH6OpenAssist.Windows;
 
 public sealed class GlobalHotkeyService : IDisposable
 {

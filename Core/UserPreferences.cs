@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ForzaFarm.Core;
+namespace FH6OpenAssist.Core;
 
 public enum ThemePreference
 {

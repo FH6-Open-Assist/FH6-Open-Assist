@@ -13,7 +13,7 @@ using Vortice.Mathematics;
 using WinRT;
 using static Vortice.Direct3D11.D3D11;
 
-namespace ForzaFarm.Vision;
+namespace FH6OpenAssist.Vision;
 
 internal sealed class WindowsGraphicsCaptureSession : IDisposable
 {
