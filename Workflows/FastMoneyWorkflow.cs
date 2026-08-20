@@ -13,16 +13,29 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     private const double PositionCandidateThreshold = 0.70;
     private const double MinimumPositionAuthorizationThreshold = 0.90;
     private const int PositionHandbrakeHoldMilliseconds = 25_000;
-    private const int PositionHandbrakeProbeMilliseconds = 550;
+    private const int PositionHandbrakeProbeMilliseconds = 700;
     private const int PositionHandbrakeFrameIntervalMilliseconds = 35;
     private const int PositionHandbrakeConsensusFrames = 3;
     private const long MinimumMaximumPlausibleCreditGain = 2_000_000;
     // A gravação nominal usava 250 ms, mas captura + inferência faziam cada
     // passo durar ~896 ms. Com o ONNX atual mais rápido, 310 ms preservam esse
-    // intervalo físico (aceleração + coasting) sem aumentar o hold de 550 ms.
+    // intervalo físico (aceleração + coasting) sem aumentar o hold do acelerador de 550 ms.
     private const int PositionThrottleSettleMilliseconds = 310;
     private const int PreRaceReadyTimeoutMilliseconds = 8_000;
+    private const int PreRaceStartConfirmationMilliseconds = 900;
+    private const int PreRaceStartSettleMilliseconds = 6_000;
+    private const int PreRaceStartMaximumAttempts = 2;
+    private const int PreRaceExitSettleMilliseconds = 12_000;
     private static readonly double[] PositionThrottleRamp = [0.32, 0.32, 0.32, 0.37, 0.37, 0.42];
+    private static readonly RectangleF[] PreRaceMenuSelectionRows =
+    [
+        new(0.034f, 0.608f, 0.018f, 0.035f),
+        new(0.034f, 0.658f, 0.018f, 0.035f),
+        new(0.034f, 0.708f, 0.018f, 0.035f),
+        new(0.034f, 0.758f, 0.018f, 0.035f),
+        new(0.034f, 0.808f, 0.018f, 0.035f)
+    ];
+    private static readonly RectangleF ExitConfirmationYesSelection = new(0.32f, 0.51f, 0.36f, 0.06f);
     private static readonly ClassicalGameStateDetector ClassicalState = new();
 
     public MacroKind Kind => MacroKind.Farmar200kMin;
@@ -266,11 +279,21 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
         AutomationContext context,
         CancellationToken cancellationToken)
     {
-        for (var pass = 1; pass <= 2; pass++)
+        for (var pass = 1; pass <= 3; pass++)
         {
             var state = await context.GameContext.DetectAsync(cancellationToken);
             if (state.Kind == GameContextKind.StreetMenu)
             {
+                return;
+            }
+
+            if (HasExitConfirmation(state))
+            {
+                context.Logger.State(
+                    Workflow,
+                    "RetomarConfirmacaoSaida",
+                    "Modal de saída já aberto; retomando pela confirmação validada, sem renavegar o menu.");
+                _ = await ConfirmOpenExitAndOpenStreetMenuAsync(context, state, cancellationToken);
                 return;
             }
 
@@ -289,6 +312,12 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 await context.Input.TapAsync(GameKey.Enter, cancellationToken, 120);
                 await Task.Delay(1_200, cancellationToken);
                 continue;
+            }
+
+            if (state.Kind == GameContextKind.EventPreRaceMenu)
+            {
+                await RecoverFromPreRaceMenuAsync(context, state, cancellationToken);
+                return;
             }
 
             if (state.Kind == GameContextKind.WorldMap)
@@ -329,6 +358,60 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
         throw new CalibrationRequiredException(
             "Não foi possível preparar o menu da rua após uma recuperação limitada.");
+    }
+
+    private static async Task RecoverFromPreRaceMenuAsync(
+        AutomationContext context,
+        GameContextResult preRaceMenu,
+        CancellationToken cancellationToken)
+    {
+        if (preRaceMenu.Kind != GameContextKind.EventPreRaceMenu)
+        {
+            throw new AutomationFaultException(
+                $"Recuperação recusada porque o contexto é {preRaceMenu.Kind}, não EventPreRaceMenu.");
+        }
+
+        var selectedRow = await context.Vision.FindLimeSelectionAsync(
+            PreRaceMenuSelectionRows,
+            cancellationToken,
+            minimumRatio: 0.08);
+        if (selectedRow < 0)
+        {
+            await ThrowUnknownContextAsync(
+                context,
+                "LocalizarFocoMenuPreCorrida",
+                preRaceMenu,
+                cancellationToken);
+        }
+
+        context.Logger.State(
+            Workflow,
+            "SairMenuPreCorrida",
+            $"Menu pré-corrida remanescente detectado; foco validado na linha {selectedRow + 1}/5. " +
+            "Navegando somente até Sair da Corrida, sem iniciar nem dirigir.");
+        for (var row = selectedRow; row < PreRaceMenuSelectionRows.Length - 1; row++)
+        {
+            await PulseAsync(context, GameKey.Down, 70, 110, cancellationToken);
+        }
+
+        var exitRow = await context.Vision.FindLimeSelectionAsync(
+            PreRaceMenuSelectionRows,
+            cancellationToken,
+            minimumRatio: 0.08);
+        if (exitRow != PreRaceMenuSelectionRows.Length - 1)
+        {
+            await ThrowUnknownContextAsync(
+                context,
+                "SelecionarSaidaMenuPreCorrida",
+                preRaceMenu,
+                cancellationToken);
+        }
+
+        context.Logger.State(
+            Workflow,
+            "SelecionarSaidaPreCorrida",
+            "Sair da Corrida confirmado pela borda verde; abrindo o modal de saída.");
+        await OpenSelectedExitAndConfirmStreetMenuAsync(context, cancellationToken);
     }
 
     private static async Task OpenEventAndPositionAsync(
@@ -378,13 +461,60 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             last = ClassicalState.Analyze(captured.Bitmap);
             if (last.Kind == ClassicalGameStateKind.EventPreRaceMenu)
             {
-                context.Logger.State(
-                    Workflow,
-                    "IniciarCorrida",
-                    $"Menu pré-corrida confirmado por visão clássica ({last.Evidence}, " +
-                    $"{last.Elapsed.TotalMilliseconds:F1} ms); iniciando no instante calibrado.");
-                await PulseAsync(context, GameKey.Enter, 79, 6_000, cancellationToken);
-                return;
+                for (var startAttempt = 1;
+                     startAttempt <= PreRaceStartMaximumAttempts;
+                     startAttempt++)
+                {
+                    context.Logger.State(
+                        Workflow,
+                        "IniciarCorrida",
+                        $"Menu pré-corrida confirmado por visão clássica ({last.Evidence}, " +
+                        $"{last.Elapsed.TotalMilliseconds:F1} ms); iniciando no instante calibrado " +
+                        $"({startAttempt}/{PreRaceStartMaximumAttempts}).");
+
+                    await PulseAsync(context, GameKey.Enter, 120, 0, cancellationToken);
+                    var startReleasedTimestamp = Stopwatch.GetTimestamp();
+                    await Task.Delay(PreRaceStartConfirmationMilliseconds, cancellationToken);
+
+                    using var afterStartFrame = await context.Capture.CaptureAsync(cancellationToken);
+                    var afterStart = ClassicalState.Analyze(afterStartFrame.Bitmap);
+                    if (afterStart.Kind == ClassicalGameStateKind.EventPreRaceMenu)
+                    {
+                        if (startAttempt < PreRaceStartMaximumAttempts)
+                        {
+                            context.Logger.Warn(
+                                $"O comando de iniciar corrida não fechou o menu pré-corrida " +
+                                $"({startAttempt}/{PreRaceStartMaximumAttempts}); repetindo A uma única vez.");
+                            continue;
+                        }
+
+                        throw new CalibrationRequiredException(
+                            "O menu pré-corrida permaneceu aberto após duas confirmações limitadas; " +
+                            "nenhuma entrada de direção foi enviada.");
+                    }
+
+                    if (afterStart.Kind != ClassicalGameStateKind.Unknown)
+                    {
+                        throw new CalibrationRequiredException(
+                            $"O início da corrida saiu para um contexto clássico inesperado " +
+                            $"({afterStart.Kind}: {afterStart.Evidence}); nenhuma entrada de direção foi enviada.");
+                    }
+
+                    var elapsedSinceRelease = Stopwatch.GetElapsedTime(startReleasedTimestamp);
+                    var remainingSettleMilliseconds = PreRaceStartSettleMilliseconds -
+                        (int)Math.Ceiling(elapsedSinceRelease.TotalMilliseconds);
+                    if (remainingSettleMilliseconds > 0)
+                    {
+                        await Task.Delay(remainingSettleMilliseconds, cancellationToken);
+                    }
+
+                    context.Logger.State(
+                        Workflow,
+                        "ConfirmarInicioCorrida",
+                        $"Menu pré-corrida desapareceu após {startAttempt}/{PreRaceStartMaximumAttempts}; " +
+                        "rota liberada no mesmo deadline calibrado.");
+                    return;
+                }
             }
 
             await Task.Delay(150, cancellationToken);
@@ -739,7 +869,8 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             Workflow,
             "FreioMao",
             "Candidato de encaixe detectado; freio de mão acionado imediatamente. " +
-            "Sem consenso ele é liberado em até 550 ms; confirmado, permanece por pelo menos 25 s.");
+            $"Sem consenso ele é liberado em até {PositionHandbrakeProbeMilliseconds} ms; " +
+            "confirmado, permanece por pelo menos 25 s.");
         return task;
     }
 
@@ -947,6 +1078,21 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             await ThrowUnknownContextAsync(context, "SelecionarSaidaEvento", eventMenu, cancellationToken);
         }
 
+        _ = await OpenSelectedExitAndConfirmStreetMenuAsync(context, cancellationToken);
+        await CloseStreetMenuAsync(context, cancellationToken);
+        context.Logger.State(
+            Workflow,
+            "AguardarNovaTentativa",
+            $"Street confirmado; aguardando {context.Settings.CrFarm.RecoveryDelaySeconds} s antes da nova tentativa.");
+        await Task.Delay(
+            TimeSpan.FromSeconds(Math.Max(1, context.Settings.CrFarm.RecoveryDelaySeconds)),
+            cancellationToken);
+    }
+
+    private static async Task<GameContextResult> OpenSelectedExitAndConfirmStreetMenuAsync(
+        AutomationContext context,
+        CancellationToken cancellationToken)
+    {
         await context.Input.TapAsync(GameKey.Enter, cancellationToken, 120);
         await Task.Delay(700, cancellationToken);
         var afterExit = await context.GameContext.DetectAsync(cancellationToken);
@@ -965,13 +1111,42 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 cancellationToken);
         }
 
+        return await ConfirmOpenExitAndOpenStreetMenuAsync(
+            context,
+            afterExit,
+            cancellationToken);
+    }
+
+    private static async Task<GameContextResult> ConfirmOpenExitAndOpenStreetMenuAsync(
+        AutomationContext context,
+        GameContextResult afterExit,
+        CancellationToken cancellationToken)
+    {
+        if (!HasExitConfirmation(afterExit))
+        {
+            throw new AutomationFaultException(
+                $"Confirmação de saída recusada porque o contexto é {afterExit.Kind}.");
+        }
+
         for (var confirmationAttempt = 1;
              confirmationAttempt <= 3 && HasExitConfirmation(afterExit);
              confirmationAttempt++)
         {
+            var yesSelected = await context.Vision.HasLimeSelectionAsync(
+                ExitConfirmationYesSelection,
+                cancellationToken,
+                minimumRatio: 0.05);
+            if (!yesSelected)
+            {
+                await ThrowUnknownContextAsync(
+                    context,
+                    "ValidarSimConfirmacaoSaida",
+                    afterExit,
+                    cancellationToken);
+            }
+
             // "Sim" já é a opção selecionada pelo jogo. Um único A/Enter é
-            // mais confiável que clicar numa palavra pequena reconhecida pelo
-            // OCR e evita o duplo acionamento do modal.
+            // validado pela borda verde antes de cada tentativa limitada.
             await context.Input.TapAsync(GameKey.Enter, cancellationToken, 160);
             await Task.Delay(900, cancellationToken);
             afterExit = await context.GameContext.DetectAsync(cancellationToken);
@@ -989,21 +1164,14 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
         // O carregamento é intencionalmente ocioso. Uma única sonda por ESC é
         // feita depois, evitando OCR/polling contínuo durante a transição.
-        await Task.Delay(12_000, cancellationToken);
+        await Task.Delay(PreRaceExitSettleMilliseconds, cancellationToken);
         var streetMenu = await OpenAndDetectOutcomeMenuAsync(context, cancellationToken);
         if (streetMenu.Kind != GameContextKind.StreetMenu)
         {
             await ThrowUnknownContextAsync(context, "ConfirmarRetornoRua", streetMenu, cancellationToken);
         }
 
-        await CloseStreetMenuAsync(context, cancellationToken);
-        context.Logger.State(
-            Workflow,
-            "AguardarNovaTentativa",
-            $"Street confirmado; aguardando {context.Settings.CrFarm.RecoveryDelaySeconds} s antes da nova tentativa.");
-        await Task.Delay(
-            TimeSpan.FromSeconds(Math.Max(1, context.Settings.CrFarm.RecoveryDelaySeconds)),
-            cancellationToken);
+        return streetMenu;
     }
 
     private static async Task CloseStreetMenuAsync(
@@ -1092,7 +1260,8 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     {
         var text = GameVisionService.Normalize(result.Document.Text);
         return result.Kind == GameContextKind.EventExitConfirmation ||
-               text.Contains("SAIR DO EVENTO", StringComparison.Ordinal) &&
+               (text.Contains("SAIR DO EVENTO", StringComparison.Ordinal) ||
+                text.Contains("SAIR DA CORRIDA", StringComparison.Ordinal)) &&
                text.Contains("SIM", StringComparison.Ordinal) &&
                text.Contains("NAO", StringComparison.Ordinal);
     }

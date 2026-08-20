@@ -62,13 +62,18 @@ public sealed class GameContextDetector(
 
         if (classical.Kind == ClassicalGameStateKind.ConfirmationDialog)
         {
-            if (ocr.Kind == GameContextKind.EventMenu &&
-                normalizedText.Contains("SAIR DO EVENTO", StringComparison.Ordinal))
+            var isExitConfirmation =
+                (ocr.Kind == GameContextKind.EventMenu &&
+                 normalizedText.Contains("SAIR DO EVENTO", StringComparison.Ordinal)) ||
+                (normalizedText.Contains("SAIR DA CORRIDA", StringComparison.Ordinal) &&
+                 normalizedText.Contains("SIM", StringComparison.Ordinal) &&
+                 normalizedText.Contains("NAO", StringComparison.Ordinal));
+            if (isExitConfirmation)
             {
                 return new GameContextResult(
                     GameContextKind.EventExitConfirmation,
                     0.995,
-                    $"texto Sair do Evento + visão clássica ({classical.Evidence}, " +
+                    $"texto de saída + visão clássica ({classical.Evidence}, " +
                     $"{classical.Elapsed.TotalMilliseconds:F1} ms)",
                     ocr.Document);
             }
