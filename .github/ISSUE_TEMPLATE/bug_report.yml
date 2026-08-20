@@ -16,7 +16,9 @@ body:
         - Skill Points
         - Farm de CR
         - WheelSpin Mad Mike
+        - Gastar Wheelspins
         - Interface ou inicialização
+        - Captura, OCR ou visão
         - Outro
     validations:
       required: true
@@ -34,10 +36,24 @@ body:
     id: version
     attributes:
       label: Versão
-      description: Exemplo: v0.1.0.
+      description: "Exemplo: v0.1.0."
       placeholder: v0.1.0
     validations:
       required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Ambiente do jogo
+      description: Informe Windows, resolução, FPS aproximado e confirme o idioma pt-BR.
+      placeholder: Windows 11; 1920x1080; 60 FPS; jogo em pt-BR
+    validations:
+      required: true
+  - type: input
+    id: attempt
+    attributes:
+      label: Tentativa ou estado registrado
+      description: Para Farm de CR, informe o número/ID da tentativa e Prediction/GroundTruth/Outcome, se aparecerem no log.
+      placeholder: Attempt 9; Prediction Unknown; outcome RejectedByModel
   - type: textarea
     id: problem
     attributes:
@@ -65,8 +81,8 @@ body:
   - type: textarea
     id: additional
     attributes:
-      label: Imagens ou contexto adicional
-      description: Arraste imagens de diagnóstico já revisadas para remover informações pessoais.
+      label: Contexto adicional
+      description: Não envie o dataset. Anexe uma imagem somente se for indispensável e depois de ocultar gamertag, saldo e outros dados pessoais.
   - type: checkboxes
     id: checks
     attributes:
@@ -75,4 +91,6 @@ body:
         - label: Verifiquei que não existe uma issue aberta sobre o mesmo problema.
           required: true
         - label: Removi informações pessoais, credenciais e tokens do conteúdo enviado.
+          required: true
+        - label: Não anexei `ExemplosPosition`, logs completos ou capturas brutas da minha tela.
           required: true

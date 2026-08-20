@@ -46,7 +46,7 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar um atalho na Área de Trabalho"; GroupDescription: "Atalhos adicionais:"; Flags: unchecked
-Name: "vigembuslink"; Description: "Abrir a página oficial do ViGEmBus após a instalação"; GroupDescription: "Dependência opcional para o modo em segundo plano:"; Flags: unchecked
+Name: "vigembuslink"; Description: "Abrir a página oficial do ViGEmBus após a instalação"; GroupDescription: "Necessário para o segundo plano e para o Farm de CR:"; Flags: unchecked
 
 [Files]
 Source: "{#StagingDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "portable.marker"
@@ -81,12 +81,12 @@ begin
   else
     StatusMessage :=
       'Não foi encontrada uma entrada de registro do serviço ViGEmBus. ' +
-      'A instalação do FH6 Open Assist pode continuar normalmente. ' +
-      'O ViGEmBus é necessário somente para o modo em segundo plano e pode ser obtido pelo link oficial opcional.';
+      'A instalação do FH6 Open Assist pode continuar normalmente, mas o segundo plano e o Farm de CR ficarão indisponíveis. ' +
+      'O ViGEmBus também é usado pelo Farm de CR em primeiro plano para a aceleração analógica.';
 
   ViGEmStatusPage := CreateOutputMsgPage(
     wpSelectDir,
     'Verificação indicativa do ViGEmBus',
-    'Dependência opcional do modo em segundo plano',
+    'Dependência do segundo plano e do Farm de CR',
     StatusMessage);
 end;

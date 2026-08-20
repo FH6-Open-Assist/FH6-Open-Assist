@@ -4,6 +4,22 @@ title: "[Melhoria]: "
 labels:
   - enhancement
 body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Área afetada
+      options:
+        - Skill Points
+        - Farm de CR
+        - WheelSpin Mad Mike
+        - Gastar Wheelspins
+        - Visão, OCR ou treinamento
+        - Entrada ou segundo plano
+        - Interface
+        - Distribuição
+        - Outro
+    validations:
+      required: true
   - type: textarea
     id: need
     attributes:
@@ -23,6 +39,11 @@ body:
     attributes:
       label: Alternativas consideradas
       description: Opcionalmente, explique outras abordagens avaliadas.
+  - type: textarea
+    id: safety
+    attributes:
+      label: Estado seguro esperado
+      description: Explique o que o BOT deve fazer quando a tela, leitura ou contexto não puder ser confirmado.
   - type: checkboxes
     id: checks
     attributes:
