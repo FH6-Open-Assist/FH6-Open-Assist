@@ -12,49 +12,169 @@
 
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Default">
-                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#101216" />
-                    <SolidColorBrush x:Key="PanelBrush" Color="#1A1D23" />
-                    <SolidColorBrush x:Key="PanelHoverBrush" Color="#252A32" />
-                    <SolidColorBrush x:Key="TextBrush" Color="#F5F7FA" />
-                    <SolidColorBrush x:Key="MutedTextBrush" Color="#A9B0BA" />
+                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#160A24" />
+                    <SolidColorBrush x:Key="PanelBrush" Color="#F0191026" />
+                    <SolidColorBrush x:Key="PanelHoverBrush" Color="#2B1D3B" />
+                    <SolidColorBrush x:Key="LayerBrush" Color="#F0211530" />
+                    <SolidColorBrush x:Key="SubtleFillBrush" Color="#30203E" />
+                    <SolidColorBrush x:Key="CardStrokeBrush" Color="#4B365D" />
+                    <SolidColorBrush x:Key="CardStrokeStrongBrush" Color="#8B5FA5" />
+                    <SolidColorBrush x:Key="TextBrush" Color="#F8F4FF" />
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="#BDB0C7" />
                     <SolidColorBrush x:Key="AccentBrush" Color="#B8FF00" />
-                    <SolidColorBrush x:Key="DangerBrush" Color="#FF5573" />
-                    <SolidColorBrush x:Key="LogBackgroundBrush" Color="#0C0E11" />
-                    <SolidColorBrush x:Key="LogBorderBrush" Color="#303640" />
-                    <SolidColorBrush x:Key="LogTextBrush" Color="#D5DAE1" />
-                    <SolidColorBrush x:Key="StatusIdleBrush" Color="#89919D" />
-                    <SolidColorBrush x:Key="StatusRunningBrush" Color="#B8FF00" />
-                    <SolidColorBrush x:Key="StatusFailureBrush" Color="#FF5573" />
-                    <SolidColorBrush x:Key="StatusWarningBrush" Color="#FFC35A" />
-                    <SolidColorBrush x:Key="StatusArmedBrush" Color="#53A6FF" />
+                    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#263E5200" />
+                    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#B8FF00" />
+                    <SolidColorBrush x:Key="AccentTextBrush" Color="#E8FFB5" />
+                    <SolidColorBrush x:Key="ShellAccentBrush" Color="#FF765E" />
+                    <SolidColorBrush x:Key="ShellAccentHoverBrush" Color="#FF8B78" />
+                    <SolidColorBrush x:Key="ShellAccentPressedBrush" Color="#E45B52" />
+                    <SolidColorBrush x:Key="ShellAccentSubtleBrush" Color="#3DFF6F91" />
+                    <SolidColorBrush x:Key="ShellAccentForegroundBrush" Color="#FFE2D7" />
+                    <SolidColorBrush x:Key="ShellAccentButtonTextBrush" Color="#2D0A16" />
+                    <LinearGradientBrush
+                        x:Key="ShellSunsetGradientBrush"
+                        StartPoint="0,0"
+                        EndPoint="1,0">
+                        <GradientStop Color="#FFB454" Offset="0" />
+                        <GradientStop Color="#FF765E" Offset="0.45" />
+                        <GradientStop Color="#C05CFF" Offset="1" />
+                    </LinearGradientBrush>
+                    <BitmapImage
+                        x:Key="ShellBackdropSource"
+                        UriSource="ms-appx:///Assets/UI/drive-in-sunset-backdrop.png" />
+                    <x:Double x:Key="ShellBackdropOpacity">0.56</x:Double>
+                    <LinearGradientBrush
+                        x:Key="BackdropScrimBrush"
+                        StartPoint="0,0"
+                        EndPoint="0,1">
+                        <GradientStop Color="#5C12091F" Offset="0" />
+                        <GradientStop Color="#82180B29" Offset="0.58" />
+                        <GradientStop Color="#B8160928" Offset="1" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="BotCardForegroundBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="BotCardMutedForegroundBrush" Color="#E4E9F0" />
+                    <SolidColorBrush x:Key="BotCardAccentBrush" Color="#D8FF73" />
+                    <LinearGradientBrush
+                        x:Key="BotImageTextOverlayBrush"
+                        StartPoint="0,0"
+                        EndPoint="0,1">
+                        <GradientStop Color="#26000000" Offset="0" />
+                        <GradientStop Color="#74000000" Offset="0.58" />
+                        <GradientStop Color="#B0000000" Offset="1" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="BadgeNeutralBrush" Color="#372742" />
+                    <SolidColorBrush x:Key="DangerBrush" Color="#FF6B81" />
+                    <SolidColorBrush x:Key="SuccessBrush" Color="#72D69C" />
+                    <SolidColorBrush x:Key="WarningBrush" Color="#FFC26B" />
+                    <SolidColorBrush x:Key="LogBackgroundBrush" Color="#120A1C" />
+                    <SolidColorBrush x:Key="LogBorderBrush" Color="#4B365D" />
+                    <SolidColorBrush x:Key="LogTextBrush" Color="#E9DFF0" />
+                    <SolidColorBrush x:Key="StatusIdleBrush" Color="#A899B4" />
+                    <SolidColorBrush x:Key="StatusRunningBrush" Color="#83E3A1" />
+                    <SolidColorBrush x:Key="StatusFailureBrush" Color="#FF6B81" />
+                    <SolidColorBrush x:Key="StatusWarningBrush" Color="#FFC26B" />
+                    <SolidColorBrush x:Key="StatusArmedBrush" Color="#C184FF" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F7F7F7" />
-                    <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="PanelHoverBrush" Color="#EDEDED" />
-                    <SolidColorBrush x:Key="TextBrush" Color="#1B1B1B" />
-                    <SolidColorBrush x:Key="MutedTextBrush" Color="#5D6470" />
-                    <SolidColorBrush x:Key="AccentBrush" Color="#4F7200" />
+                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FFF3E9" />
+                    <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFBF8" />
+                    <SolidColorBrush x:Key="PanelHoverBrush" Color="#F7E9F0" />
+                    <SolidColorBrush x:Key="LayerBrush" Color="#FFF8F4F5" />
+                    <SolidColorBrush x:Key="SubtleFillBrush" Color="#F5E7ED" />
+                    <SolidColorBrush x:Key="CardStrokeBrush" Color="#DCC8D5" />
+                    <SolidColorBrush x:Key="CardStrokeStrongBrush" Color="#9A7897" />
+                    <SolidColorBrush x:Key="TextBrush" Color="#281729" />
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="#6A586A" />
+                    <SolidColorBrush x:Key="AccentBrush" Color="#4F7300" />
+                    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#184F7300" />
+                    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#4F7300" />
+                    <SolidColorBrush x:Key="AccentTextBrush" Color="#354F00" />
+                    <SolidColorBrush x:Key="ShellAccentBrush" Color="#B72E52" />
+                    <SolidColorBrush x:Key="ShellAccentHoverBrush" Color="#9F2346" />
+                    <SolidColorBrush x:Key="ShellAccentPressedBrush" Color="#861D3B" />
+                    <SolidColorBrush x:Key="ShellAccentSubtleBrush" Color="#24B72E52" />
+                    <SolidColorBrush x:Key="ShellAccentForegroundBrush" Color="#7A1D40" />
+                    <SolidColorBrush x:Key="ShellAccentButtonTextBrush" Color="#FFFFFF" />
+                    <LinearGradientBrush
+                        x:Key="ShellSunsetGradientBrush"
+                        StartPoint="0,0"
+                        EndPoint="1,0">
+                        <GradientStop Color="#E99032" Offset="0" />
+                        <GradientStop Color="#D23C72" Offset="0.45" />
+                        <GradientStop Color="#7B42C3" Offset="1" />
+                    </LinearGradientBrush>
+                    <BitmapImage
+                        x:Key="ShellBackdropSource"
+                        UriSource="ms-appx:///Assets/UI/drive-in-daylight-backdrop.png" />
+                    <x:Double x:Key="ShellBackdropOpacity">0.82</x:Double>
+                    <LinearGradientBrush
+                        x:Key="BackdropScrimBrush"
+                        StartPoint="0,0"
+                        EndPoint="0,1">
+                        <GradientStop Color="#52FFFDF8" Offset="0" />
+                        <GradientStop Color="#80FFF8F4" Offset="0.58" />
+                        <GradientStop Color="#C2F7EEF2" Offset="1" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="BotCardForegroundBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="BotCardMutedForegroundBrush" Color="#E4E9F0" />
+                    <SolidColorBrush x:Key="BotCardAccentBrush" Color="#D8FF73" />
+                    <LinearGradientBrush
+                        x:Key="BotImageTextOverlayBrush"
+                        StartPoint="0,0"
+                        EndPoint="0,1">
+                        <GradientStop Color="#26000000" Offset="0" />
+                        <GradientStop Color="#74000000" Offset="0.58" />
+                        <GradientStop Color="#B0000000" Offset="1" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="BadgeNeutralBrush" Color="#F3E5EB" />
                     <SolidColorBrush x:Key="DangerBrush" Color="#C42B44" />
-                    <SolidColorBrush x:Key="LogBackgroundBrush" Color="#F3F3F3" />
-                    <SolidColorBrush x:Key="LogBorderBrush" Color="#B9C0C8" />
-                    <SolidColorBrush x:Key="LogTextBrush" Color="#1B1B1B" />
-                    <SolidColorBrush x:Key="StatusIdleBrush" Color="#5D6470" />
-                    <SolidColorBrush x:Key="StatusRunningBrush" Color="#4F7200" />
+                    <SolidColorBrush x:Key="SuccessBrush" Color="#197A4C" />
+                    <SolidColorBrush x:Key="WarningBrush" Color="#915800" />
+                    <SolidColorBrush x:Key="LogBackgroundBrush" Color="#FBF2F5" />
+                    <SolidColorBrush x:Key="LogBorderBrush" Color="#D6BFCF" />
+                    <SolidColorBrush x:Key="LogTextBrush" Color="#281729" />
+                    <SolidColorBrush x:Key="StatusIdleBrush" Color="#756475" />
+                    <SolidColorBrush x:Key="StatusRunningBrush" Color="#197A4C" />
                     <SolidColorBrush x:Key="StatusFailureBrush" Color="#C42B44" />
-                    <SolidColorBrush x:Key="StatusWarningBrush" Color="#8A5A00" />
-                    <SolidColorBrush x:Key="StatusArmedBrush" Color="#005FB8" />
+                    <SolidColorBrush x:Key="StatusWarningBrush" Color="#915800" />
+                    <SolidColorBrush x:Key="StatusArmedBrush" Color="#7B42B4" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
-                    <SolidColorBrush x:Key="PanelBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="PanelBrush" Color="{ThemeResource SystemColorWindowColor}" />
                     <SolidColorBrush x:Key="PanelHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="LayerBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="SubtleFillBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="CardStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="CardStrokeStrongBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="TextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="MutedTextBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
                     <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="AccentSubtleBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="HoverOverlayBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="AccentTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="ShellAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="ShellAccentHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="ShellAccentPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="ShellAccentSubtleBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="ShellAccentForegroundBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="ShellAccentButtonTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="ShellSunsetGradientBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <BitmapImage
+                        x:Key="ShellBackdropSource"
+                        UriSource="ms-appx:///Assets/UI/drive-in-sunset-backdrop.png" />
+                    <x:Double x:Key="ShellBackdropOpacity">0</x:Double>
+                    <SolidColorBrush x:Key="BackdropScrimBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="BotCardForegroundBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="BotCardMutedForegroundBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="BotCardAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="BotImageTextOverlayBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="BadgeNeutralBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
                     <SolidColorBrush x:Key="DangerBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="SuccessBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="WarningBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="LogBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
                     <SolidColorBrush x:Key="LogBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="LogTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
@@ -65,6 +185,91 @@
                     <SolidColorBrush x:Key="StatusArmedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+
+            <Style x:Key="DashboardPanelStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource PanelBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="16" />
+            </Style>
+
+            <Style x:Key="DashboardBadgeStyle" TargetType="Border">
+                <Setter Property="Padding" Value="9,4" />
+                <Setter Property="Background" Value="{ThemeResource BadgeNeutralBrush}" />
+                <Setter Property="CornerRadius" Value="6" />
+            </Style>
+
+            <Style x:Key="DashboardMetricStyle" TargetType="Border">
+                <Setter Property="Padding" Value="10,8" />
+                <Setter Property="Background" Value="{ThemeResource LayerBrush}" />
+                <Setter Property="CornerRadius" Value="8" />
+            </Style>
+
+            <Style x:Key="SunsetAccentButtonStyle" TargetType="Button">
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="14,8" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{ThemeResource ShellAccentBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource ShellAccentBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Foreground" Value="{ThemeResource ShellAccentButtonTextBrush}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="RootGrid">
+                                <Border
+                                    x:Name="ButtonContainer"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                    <ContentPresenter
+                                        Content="{TemplateBinding Content}"
+                                        ContentTemplate="{TemplateBinding ContentTemplate}"
+                                        Foreground="{TemplateBinding Foreground}"
+                                        HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                        VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                </Border>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContainer" Storyboard.TargetProperty="Background">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentHoverBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContainer" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentHoverBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContainer" Storyboard.TargetProperty="Background">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentPressedBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ButtonContainer" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentPressedBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Opacity" To="0.45" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

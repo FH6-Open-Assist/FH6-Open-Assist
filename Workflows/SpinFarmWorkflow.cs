@@ -22,6 +22,9 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             workflow,
             "Recursos",
             "Partindo da tela inicial da garagem e lendo SP e créditos disponíveis.");
+        context.Telemetry.UpdateStage(
+            "Lendo recursos",
+            "Confirmando SP e créditos disponíveis antes de iniciar compras.");
         var resources = await navigator.OpenMasteryAndReadAsync(
             cancellationToken,
             normalizeGarageMenu: false,
@@ -38,6 +41,9 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             $"Saldo: {resources.SkillPoints} SP e {credits:N0} CR. " +
             $"É possível concluir {purchases} compra(s) de {settings.SkillPointsPerCar} SP e " +
             $"{settings.CreditsPerCar:N0} CR.");
+        context.Telemetry.UpdateStage(
+            "Planejando ciclos",
+            $"Recursos confirmados para até {purchases} ciclo(s) completo(s).");
 
         if (purchases <= 0)
         {
@@ -52,7 +58,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.Logger.State(workflow, "CicloCompra", $"Carro {car}/{purchases}.");
+            context.Telemetry.UpdateStage(
+                "Ciclo WheelSpin",
+                $"Carro {car}/{purchases}: iniciando compra, Maestria, troca e remoção.");
             await ExecuteCarCycleAsync(context, navigator, cancellationToken);
+            context.Telemetry.CycleCompleted(
+                $"Carro {car}/{purchases}: compra, Maestria, troca e remoção confirmadas visualmente.");
         }
 
         context.Logger.State(
@@ -72,10 +83,22 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "CicloVisual",
             "Compra, Maestria, troca e remoção serão confirmadas visualmente em cada transição.");
 
+        context.Telemetry.UpdateStage(
+            "Comprando Mad Mike",
+            "Abrindo a concessionária e confirmando a compra do carro configurado.");
         await OpenDealerAsync(context, navigator, cancellationToken);
         await BuyMadMikeAsync(context, cancellationToken);
+        context.Telemetry.UpdateStage(
+            "Desbloqueando Maestria",
+            "Aplicando os pontos e confirmando visualmente o perk final.");
         await UnlockMasteryAsync(context, navigator, cancellationToken);
+        context.Telemetry.UpdateStage(
+            "Trocando de carro",
+            "Ativando outro carro antes de remover o Mad Mike utilizado.");
         await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
+        context.Telemetry.UpdateStage(
+            "Removendo Mad Mike",
+            "Localizando e removendo o carro após concluir a Maestria.");
         await RemoveMadMikeAsync(context, navigator, cancellationToken);
 
         context.Logger.State(

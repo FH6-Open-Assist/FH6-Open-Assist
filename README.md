@@ -1,9 +1,28 @@
 # FH6 Open Assist
 
+[![GPLv3](https://img.shields.io/badge/licen%C3%A7a-GPLv3-4F7200.svg)](LICENSE)
+![Windows 10 e 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)
+![WinUI 3](https://img.shields.io/badge/interface-WinUI%203-0078D4.svg)
+
 Assistente de automação de código aberto para **Forza Horizon 6**, feito em WinUI 3 para reduzir tarefas repetitivas no Windows com verificações visuais e paradas seguras.
 
 > [!IMPORTANT]
-> Este é um projeto independente, não oficial e sem vínculo com Microsoft, Xbox ou Playground Games. O uso de automações pode contrariar as regras do jogo. Use por sua conta e risco.
+> Este é um projeto independente, não oficial e sem vínculo com Microsoft, Xbox, Playground Games ou Turn 10 Studios.
+>
+> O uso de macros e ferramentas de automação pode contrariar regras ou termos do jogo e resultar em restrições ou suspensão da conta. Não existe garantia de que o uso seja permitido ou livre de punições. Utilize por sua conta e risco.
+
+## Funcionalidades
+
+| Automação | Objetivo | Situação |
+|---|---|---|
+| Skill Points | Farm de pontos de habilidade | Disponível |
+| Farm de CR | Ganho recorrente de créditos com validação conservadora | Disponível · requer ViGEmBus |
+| WheelSpin Mad Mike | Compra, Maestria e remoção assistida de carros | Disponível |
+| Gastar Wheelspins | Giro confirmado visualmente, sem compra automática | Disponível |
+| Segundo plano | WGC e controle virtual sem trazer o jogo para frente | Experimental |
+
+A interface reúne preparação do BOT, compatibilidade do modo, estado atual, métricas confiáveis da sessão e diagnóstico técnico sem estimar recompensas que o aplicativo não confirmou.
 
 ## Baixar e executar
 
@@ -26,16 +45,16 @@ O pacote é autossuficiente e não exige a instalação separada do .NET. No por
 
 1. Selecione um dos quatro BOTs.
 2. Escolha **Primeiro plano** ou **Segundo plano experimental**.
-3. Abra **Instruções** e prepare o jogo.
+3. Confira o painel **Antes de ativar** e prepare o jogo.
 4. Clique em **Ativar BOT**.
 5. Use os atalhos globais:
 
 | Atalho | Ação |
 |---|---|
-| `F8` | Inicia o BOT armado ou pausa a execução atual |
+| `F8` | Inicia o BOT armado ou interrompe a execução atual com segurança |
 | `F9` | Encerra, solta todas as entradas e desarma o BOT |
 
-Ao pausar, o fluxo atual é cancelado com segurança. Um novo `F8` reinicia o workflow a partir da tela em que o jogo estiver.
+Ao interromper, o fluxo atual é cancelado com segurança. Um novo `F8` inicia uma nova sessão a partir da tela em que o jogo estiver.
 
 ### Modos de entrada
 
@@ -112,6 +131,12 @@ Mais detalhes: [Visão, coleta e treinamento](docs/VISION_AND_TRAINING.md).
 
 Logs, diagnósticos e amostras podem conter informações visíveis da conta ou da tela do jogo. Revise e remova dados pessoais antes de compartilhar qualquer trecho. `ExemplosPosition/`, `diagnostics/` e logs são ignorados pelo Git e não fazem parte do repositório.
 
+## Segurança e transparência
+
+O FH6 Open Assist é um projeto de código aberto. O código usado para gerar a aplicação está disponível neste repositório e o programa não solicita credenciais da Microsoft ou Xbox.
+
+Entradas são liberadas no cancelamento, em falhas e no fechamento da aplicação. Estados visuais desconhecidos ou conflitantes não autorizam comandos cegos. Caso prefira, compile o executável diretamente pelo código-fonte usando as instruções abaixo.
+
 ## Executar pelo código-fonte
 
 Instale o [SDK do .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) e use PowerShell no Windows:
@@ -175,11 +200,13 @@ Tags SemVer como `v1.2.3` acionam o workflow de GitHub Release.
 
 O painel **Log da execução** registra decisões e estados sem crescer indefinidamente. Em falhas de reconhecimento, o aplicativo pode salvar um diagnóstico no diretório de dados descrito acima. Ao abrir uma issue, informe BOT, modo, tela inicial, resolução/FPS, número da tentativa e apenas o trecho necessário do log. Não anexe datasets ou capturas sem revisar a privacidade.
 
+## Contribuir
+
 Pull requests são bem-vindos. Leia o [guia de contribuição](CONTRIBUTING.md), use [issues](https://github.com/FH6-Open-Assist/FH6-Open-Assist/issues) para problemas reproduzíveis e [Discussões](https://github.com/FH6-Open-Assist/FH6-Open-Assist/discussions) para dúvidas e ideias.
 
 ## Apoie o projeto
 
-Se o FH6 Open Assist ajudou você, o apoio é voluntário e contribui para a manutenção.
+Se o FH6 Open Assist ajudou você, o apoio é voluntário e contribui para a manutenção. Nenhuma funcionalidade depende de contribuição financeira.
 
 **PIX:** `48bf874c-3e3d-48d1-89eb-4cd11b679167`
 

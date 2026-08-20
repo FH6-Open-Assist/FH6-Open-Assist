@@ -11,6 +11,7 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -36,6 +37,7 @@ public sealed partial class MainWindow : Window
     private readonly GameCaptureService _capture;
     private readonly CrPositionClassifier _crPosition;
     private readonly ResourceTracker _resources;
+    private readonly SessionTelemetry _telemetry;
     private readonly AutomationCoordinator _coordinator;
     private readonly GlobalHotkeyService _hotkeys;
     private readonly DispatcherQueue _dispatcherQueue;
@@ -88,6 +90,7 @@ public sealed partial class MainWindow : Window
         _crPosition = new CrPositionClassifier(_settings, _logger);
         var crFarmSamples = new CrFarmSampleCollector(_settings, _logger);
         _resources = new ResourceTracker();
+        _telemetry = new SessionTelemetry();
         var context = new AutomationContext
         {
             Settings = _settings,
@@ -100,6 +103,7 @@ public sealed partial class MainWindow : Window
             CrPosition = _crPosition,
             CrFarmSamples = crFarmSamples,
             Resources = _resources,
+            Telemetry = _telemetry,
             RunNestedAsync = (_, _) => Task.CompletedTask
         };
         IMacroWorkflow[] workflows =
@@ -132,6 +136,11 @@ public sealed partial class MainWindow : Window
         _loaded = true;
         _reduceMotion = !new UISettings().AnimationsEnabled;
         await InitializeBotCardsAsync();
+        if (_shutdownStarted)
+        {
+            return;
+        }
+
         ApplyBotVisualState(_selectedMacro);
 
         _updatingControls = true;
@@ -155,6 +164,7 @@ public sealed partial class MainWindow : Window
         _selectedInputMode = _settings.InputMode;
         _updatingControls = false;
         _isInitializingSelection = false;
+        InitializeDashboard();
         ApplyInputModeDescription(_settings.InputMode);
         UpdateInputModeControlsAvailability();
         MainContent.ActualThemeChanged += MainContent_ActualThemeChanged;
@@ -168,7 +178,7 @@ public sealed partial class MainWindow : Window
         }
 
         _logger.Info(
-            $"FH6 Open Assist iniciado em {InputModeLabel(_settings.InputMode)}. Ative um BOT; F8 executa/pausa e F9 encerra.");
+            $"FH6 Open Assist iniciado em {InputModeLabel(_settings.InputMode)}. Ative um BOT; F8 inicia/interrompe e F9 encerra.");
         _logger.Info(_usingMica
             ? "Plano de fundo Mica ativado."
             : "Plano de fundo sólido compatível ativado.");
@@ -177,7 +187,7 @@ public sealed partial class MainWindow : Window
 
     private void MainContent_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var isNarrow = e.NewSize.Width < 1000;
+        var isNarrow = e.NewSize.Width < 1100;
         PageLayout.Padding = new Thickness(isNarrow ? 16 : 24);
 
         Grid.SetRow(HeaderResourcesPanel, isNarrow ? 1 : 0);
@@ -185,6 +195,9 @@ public sealed partial class MainWindow : Window
         HeaderResourcesPanel.Margin = isNarrow
             ? new Thickness(0, 16, 0, 0)
             : new Thickness(16, 0, 0, 0);
+        ContextBotBadgesPanel.Orientation = e.NewSize.Width < 780
+            ? Orientation.Vertical
+            : Orientation.Horizontal;
 
         MainLeftColumn.Width = isNarrow
             ? new GridLength(1, GridUnitType.Star)
@@ -195,10 +208,10 @@ public sealed partial class MainWindow : Window
             : new GridLength(1, GridUnitType.Star);
         MainTopRow.Height = GridLength.Auto;
         MainGapRow.Height = new GridLength(isNarrow ? 16 : 0);
-        MainBottomRow.Height = new GridLength(isNarrow ? 480 : 0);
+        MainBottomRow.Height = isNarrow ? GridLength.Auto : new GridLength(0);
 
-        Grid.SetRow(LogPanel, isNarrow ? 2 : 0);
-        Grid.SetColumn(LogPanel, isNarrow ? 0 : 2);
+        Grid.SetRow(AssistantPanel, isNarrow ? 2 : 0);
+        Grid.SetColumn(AssistantPanel, isNarrow ? 0 : 2);
     }
 
     private async Task InitializeBotCardsAsync()
@@ -363,11 +376,10 @@ public sealed partial class MainWindow : Window
 
         if (_reduceMotion)
         {
-            await Task.WhenAll(
-                AnimateElementOpacityAsync(previousCard.ColorImage, 0f, TimeSpan.FromMilliseconds(300), token),
-                AnimateElementOpacityAsync(previousCard.TextOverlay, 1f, TimeSpan.FromMilliseconds(300), token),
-                AnimateElementOpacityAsync(nextCard.ColorImage, 1f, TimeSpan.FromMilliseconds(250), token),
-                AnimateElementOpacityAsync(nextCard.TextOverlay, 0.42f, TimeSpan.FromMilliseconds(250), token));
+            ElementCompositionPreview.GetElementVisual(previousCard.ColorImage).Opacity = 0f;
+            ElementCompositionPreview.GetElementVisual(previousCard.TextOverlay).Opacity = 1f;
+            ElementCompositionPreview.GetElementVisual(nextCard.ColorImage).Opacity = 1f;
+            ElementCompositionPreview.GetElementVisual(nextCard.TextOverlay).Opacity = 0.42f;
             SetGlintOpacity(nextCard, 0f);
             return;
         }
@@ -383,7 +395,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await Task.Delay(100);
+        await Task.Delay(100, token);
         if (token.IsCancellationRequested)
         {
             return;
@@ -493,14 +505,43 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (_currentState is MacroRunState.Executando or MacroRunState.Parando)
+        {
+            _updatingControls = true;
+            if (_botCards.TryGetValue(_selectedMacro, out var selectedCard))
+            {
+                selectedCard.Button.IsChecked = true;
+            }
+
+            _updatingControls = false;
+            return;
+        }
+
         if (kind == _selectedMacro)
         {
             return;
         }
 
         var previous = _selectedMacro;
+        if (!_coordinator.Select(kind))
+        {
+            _updatingControls = true;
+            if (_botCards.TryGetValue(previous, out var selectedCard))
+            {
+                selectedCard.Button.IsChecked = true;
+            }
+
+            _updatingControls = false;
+            return;
+        }
+
+        if (_telemetry.Snapshot.Bot is { } sessionBot && sessionBot != kind)
+        {
+            _telemetry.Reset();
+        }
+
         _selectedMacro = kind;
-        _coordinator.Select(kind);
+        UpdateBotContext(kind);
         await AnimateMacroSelectionTransitionAsync(previous, kind);
     }
 
@@ -666,11 +707,18 @@ public sealed partial class MainWindow : Window
             StatusText.Text = StateLabel(state);
             StatusDot.Fill = StateBrush(state);
             DetailText.Text = message;
-            ActivateBotButton.IsEnabled = state is not (MacroRunState.Executando or MacroRunState.Parando);
-            ActivateBotButton.Content = state is MacroRunState.Armado or MacroRunState.Executando or MacroRunState.Parando
-                ? "BOT ATIVO"
-                : "Ativar BOT";
+            ActivateBotButton.IsEnabled = state is not (
+                MacroRunState.Armado or MacroRunState.Executando or MacroRunState.Parando);
+            ActivateBotButton.Content = state switch
+            {
+                MacroRunState.Armado => "BOT armado",
+                MacroRunState.Executando => "Em execução",
+                MacroRunState.Parando => "Interrompendo…",
+                _ => "Ativar BOT"
+            };
+            SetBotSelectionAvailability(state is not (MacroRunState.Executando or MacroRunState.Parando));
             UpdateInputModeControlsAvailability();
+            RenderSessionSnapshot(_telemetry.Snapshot);
         });
     }
 
@@ -748,6 +796,12 @@ public sealed partial class MainWindow : Window
         {
             SkillPointsText.Text = FormatResource(snapshot.SkillPoints, snapshot.SkillPointsEstimated);
             CreditsText.Text = FormatResource(snapshot.Credits, snapshot.CreditsEstimated);
+            AutomationProperties.SetName(
+                SkillPointsText,
+                $"Pontos de habilidade detectados: {SkillPointsText.Text}");
+            AutomationProperties.SetName(
+                CreditsText,
+                $"Créditos detectados: {CreditsText.Text}");
         });
     }
 
@@ -770,6 +824,7 @@ public sealed partial class MainWindow : Window
         }
 
         _shutdownStarted = true;
+        ShutdownDashboard();
         _botAnimationCancellation?.Cancel();
         _botAnimationCancellation?.Dispose();
         MainContent.ActualThemeChanged -= MainContent_ActualThemeChanged;
@@ -828,6 +883,8 @@ public sealed partial class MainWindow : Window
         _usingMica = ConfigureBackdrop();
         StatusDot.Fill = StateBrush(_currentState);
         UpdateBackgroundInputStatusVisuals(_input.IsBackgroundInputAvailable);
+        UpdateBotContext(_selectedMacro);
+        RenderSessionSnapshot(_telemetry.Snapshot);
     }
 
     private Brush StateBrush(MacroRunState state)
@@ -908,65 +965,42 @@ public sealed partial class MainWindow : Window
 
     private static FrameworkElement CreateInstructions(MacroKind kind)
     {
-        var (summary, steps) = kind switch
-        {
-            MacroKind.FarmarSp => (
-                "Prepare o Subaru Impreza 22B-STI Version antes de armar o BOT.",
-                new[]
-                {
-                    "Selecione o Subaru Impreza 22B-STI Version, de preferência com a árvore de habilidades desbloqueada.",
-                    "Ative todas as assistências.",
-                    "Vá para a rua; não inicie dentro da garagem."
-                }),
-            MacroKind.Farmar200kMin => (
-                "Prepare o Nissan S-Cargo S1 800 sem tunagem antes de armar o BOT.",
-                new[]
-                {
-                    "Desative todas as assistências.",
-                    "Defina a dificuldade como Imbatível.",
-                    "O ajuste fino usa aceleração analógica; mantenha o ViGEmBus instalado mesmo em primeiro plano.",
-                    "Vá para a rua; não inicie dentro da garagem."
-                }),
-            MacroKind.FarmarWheelspins => (
-                "Confirme os recursos e abra a tela inicial correta.",
-                new[]
-                {
-                    "A conta precisa ser VIP.",
-                    "Tenha mais de 100.000 CR e mais de 30 SP.",
-                    "Fique na garagem, no menu Campanha."
-                }),
-            MacroKind.GastarWheelspins => (
-                "Comece na rua, no menu de pausa ou em uma tela de Wheelspin.",
-                new[]
-                {
-                    "O BOT prioriza Super Wheelspins e só gira após duas confirmações OCR.",
-                    "Saldo zero encerra sem tentativa de giro ou compra com créditos.",
-                    "Carros duplicados são mantidos; vender ou presentear nunca é escolhido automaticamente."
-                }),
-            _ => (
-                "Prepare o jogo conforme a calibração do BOT.",
-                new[] { "Confirme a tela inicial antes de ativar." })
-        };
+        var definition = BotCatalog.Get(kind);
 
         var content = new StackPanel { Spacing = 10, MaxWidth = 540 };
         content.Children.Add(new TextBlock
         {
-            Text = summary,
+            Text = definition.Description,
             TextWrapping = TextWrapping.Wrap,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
-        foreach (var step in steps)
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Tela inicial: {definition.StartContext}",
+            TextWrapping = TextWrapping.Wrap
+        });
+        foreach (var requirement in definition.Requirements)
         {
             content.Children.Add(new TextBlock
             {
-                Text = $"• {step}",
+                Text = $"• {requirement}",
                 TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        if (definition.RequiresViGEm)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = "Este BOT exige uma conexão ViGEmBus válida mesmo em primeiro plano.",
+                TextWrapping = TextWrapping.Wrap,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             });
         }
 
         content.Children.Add(new TextBlock
         {
-            Text = "Depois, clique em Ativar BOT. Use F8 para iniciar/pausar e F9 para encerrar.",
+            Text = "Depois, clique em Ativar BOT. Use F8 para iniciar/interromper e F9 para encerrar.",
             TextWrapping = TextWrapping.Wrap
         });
         return content;
@@ -986,14 +1020,7 @@ public sealed partial class MainWindow : Window
         _ => "sistema"
     };
 
-    private static string MacroDisplayName(MacroKind kind) => kind switch
-    {
-        MacroKind.FarmarSp => "Skill Points",
-        MacroKind.Farmar200kMin => "Farm de CR",
-        MacroKind.FarmarWheelspins => "WheelSpin Mad Mike",
-        MacroKind.GastarWheelspins => "Gastar Wheelspins",
-        _ => kind.ToString()
-    };
+    private static string MacroDisplayName(MacroKind kind) => BotCatalog.Get(kind).Name;
 
     private static string InputModeLabel(InputMode mode) => mode == InputMode.Foreground
         ? "primeiro plano"

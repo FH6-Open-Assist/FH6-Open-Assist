@@ -43,6 +43,9 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
                 Workflow,
                 "Preparar",
                 "Fluxo conservador: Super Wheelspins primeiro, uma leitura OCR por ciclo e nenhuma confirmação sem estado visual conhecido.");
+            context.Telemetry.UpdateStage(
+                "Localizando Wheelspins",
+                "Confirmando a tela inicial e os saldos disponíveis sem enviar entradas cegas.");
 
             var screen = await LocateEntryAsync(context, cancellationToken);
             if (IsSpinSession(screen.Kind))
@@ -58,6 +61,9 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    context.Telemetry.UpdateStage(
+                        "Selecionando Wheelspin",
+                        $"Procurando {DisplayName(spinType)} disponível para o próximo giro.");
                     var opened = await TryOpenSpinAsync(context, screen, spinType, cancellationToken);
                     if (opened is null)
                     {
@@ -104,6 +110,8 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
         var gameContext = context.GameContext.Classify(screen.Document);
         if (gameContext.Kind == GameContextKind.ControllerDisconnected)
         {
+            context.Telemetry.Recovery(
+                "Aviso de controle desconectado confirmado; tentando reconectar uma única vez.");
             context.Logger.State(
                 Workflow,
                 "ReconectarControle",
@@ -257,10 +265,22 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
         CancellationToken cancellationToken)
     {
         var spinsStarted = 0;
+        string? pendingSpinName = null;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            context.Telemetry.UpdateStage(
+                pendingSpinName is null ? "Validando Wheelspin" : "Resolvendo giro",
+                pendingSpinName is null
+                    ? "Confirmando o próximo estado seguro da sessão de Wheelspin."
+                    : $"{pendingSpinName}: confirmando o resultado e as ações seguras do prêmio.");
             screen = await ResolvePrizeActionsAsync(context, screen, cancellationToken);
+            if (pendingSpinName is not null)
+            {
+                context.Telemetry.CycleCompleted(
+                    $"{pendingSpinName}: resultado confirmado e ações de prêmio concluídas.");
+                pendingSpinName = null;
+            }
 
             if (screen.Kind == ScreenKind.Hub)
             {
@@ -298,9 +318,14 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
                 throw await CalibrationFailureAsync(context, "ConfirmarGiro", "A opção Girar não permaneceu estável em duas leituras; o giro não foi iniciado.", readyConfirmation);
             }
 
-            context.Logger.State(Workflow, "Girar", $"{DisplayName(screen.Type ?? SpinType.Standard)} confirmado em duas leituras; iniciando exatamente um giro.");
+            var spinName = DisplayName(screen.Type ?? SpinType.Standard);
+            context.Logger.State(Workflow, "Girar", $"{spinName} confirmado em duas leituras; iniciando exatamente um giro.");
+            context.Telemetry.UpdateStage(
+                "Girando Wheelspin",
+                $"{spinName} confirmado em duas leituras; iniciando exatamente um giro.");
             await context.Input.TapAsync(GameKey.Enter, cancellationToken);
             spinsStarted++;
+            pendingSpinName = spinName;
             screen = await WaitAfterActionAsync(
                 context,
                 readyConfirmation,
@@ -354,6 +379,9 @@ public sealed class SpendSpinsWorkflow : IMacroWorkflow
                 Workflow,
                 screen.Kind == ScreenKind.Duplicate ? "ManterDuplicado" : "ColetarPremio",
                 $"Executando somente a ação confirmada por OCR: '{line.Text}'.");
+            context.Telemetry.UpdateStage(
+                screen.Kind == ScreenKind.Duplicate ? "Mantendo carro duplicado" : "Coletando prêmio",
+                $"Executando a ação segura confirmada por OCR: '{line.Text}'.");
             var before = screen;
             await context.Input.ClickClientAsync(line.Center.X, line.Center.Y, cancellationToken);
             screen = await WaitAfterActionAsync(

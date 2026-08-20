@@ -60,12 +60,18 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             Workflow,
             "Iniciar",
             $"Máquina de estados ativa em {mode}; ONNX decide a posição e o menu confirma o resultado real.");
+        context.Telemetry.UpdateStage(
+            "Preparando rua",
+            $"Validando o estado inicial do Farm de CR em {mode}.");
 
         var attemptNumber = 0;
         var consecutiveRecoveries = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            context.Telemetry.UpdateStage(
+                "Preparando rua",
+                "Confirmando um estado seguro antes da próxima tentativa.");
             await PrepareStreetMenuAsync(context, cancellationToken);
             var creditsBefore = await TryReadConfirmedCreditsAsync(
                 context,
@@ -81,9 +87,15 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
             attemptNumber++;
             context.Logger.State(Workflow, "Tentativa", $"Attempt {attemptNumber}: abrindo o evento e posicionando o carro.");
+            context.Telemetry.UpdateStage(
+                "Posicionando carro",
+                $"Tentativa {attemptNumber}: abrindo o evento e alinhando o carro entre as placas.");
             await OpenEventAndPositionAsync(context, cancellationToken);
 
             using var immediateHandbrakeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            context.Telemetry.UpdateStage(
+                "Validando posição",
+                $"Tentativa {attemptNumber}: confirmando a posição com consenso visual.");
             var (prediction, frames, immediateHandbrakeTask) = await AlignAndEvaluatePositionAsync(
                 context,
                 immediateHandbrakeCts,
@@ -164,11 +176,17 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 continue;
             }
 
+            context.Telemetry.UpdateStage(
+                "Executando evento",
+                $"Tentativa {attemptNumber}: posição autorizada; executando a etapa calibrada.");
             await ExecuteCrAttemptAsync(
                 context,
                 immediateHandbrakeTask ?? throw new AutomationFaultException(
                     "O encaixe foi liberado sem iniciar o freio de mão."),
                 cancellationToken);
+            context.Telemetry.UpdateStage(
+                "Validando resultado",
+                $"Tentativa {attemptNumber}: verificando o menu final e a variação real de créditos.");
             var outcomeMenu = await OpenAndDetectOutcomeMenuAsync(context, cancellationToken);
             if (outcomeMenu.Kind == GameContextKind.StreetMenu)
             {
@@ -242,6 +260,8 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 else
                 {
                     consecutiveRecoveries = 0;
+                    context.Telemetry.CycleCompleted(
+                        $"Tentativa {attemptNumber} confirmada com ganho real de {delta:N0} CR.");
                 }
 
                 await Task.Delay(2_000, cancellationToken);
@@ -304,6 +324,8 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
             if (state.Kind == GameContextKind.ControllerDisconnected)
             {
+                context.Telemetry.Recovery(
+                    "Aviso de controle desconectado confirmado; tentando reconectar uma única vez.");
                 context.Logger.State(
                     Workflow,
                     "ReconectarControle",
@@ -369,6 +391,9 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             throw new AutomationFaultException(
                 $"Recuperação recusada porque o contexto é {preRaceMenu.Kind}, não EventPreRaceMenu.");
         }
+
+        context.Telemetry.Recovery(
+            "Menu pré-corrida remanescente confirmado; retornando à rua por um caminho validado.");
 
         var selectedRow = await context.Vision.FindLimeSelectionAsync(
             PreRaceMenuSelectionRows,
@@ -1050,6 +1075,9 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             throw new AutomationFaultException(
                 $"Recuperação recusada porque o contexto é {eventMenu.Kind}, não EventMenu.");
         }
+
+        context.Telemetry.Recovery(
+            "Menu do evento confirmado; retornando à rua antes de uma nova tentativa.");
 
         context.Logger.State(
             Workflow,

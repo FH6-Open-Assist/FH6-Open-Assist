@@ -23,65 +23,82 @@
                 <GradientStop Color="#00FFFFFF" Offset="0.76" />
                 <GradientStop Color="#00FFFFFF" Offset="1" />
             </LinearGradientBrush>
-            <LinearGradientBrush
-                x:Key="BotImageTextOverlayBrush"
-                StartPoint="0,0"
-                EndPoint="0,1">
-                <GradientStop Color="#2E000000" Offset="0" />
-                <GradientStop Color="#68000000" Offset="0.55" />
-                <GradientStop Color="#59000000" Offset="1" />
-            </LinearGradientBrush>
+
             <Style
                 x:Key="SelectionCardBaseStyle"
                 TargetType="RadioButton">
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 <Setter Property="VerticalContentAlignment" Value="Stretch" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
-                <Setter Property="Padding" Value="14" />
-                <Setter Property="Background" Value="{ThemeResource PanelBrush}" />
-                <Setter Property="BorderBrush" Value="{ThemeResource PanelHoverBrush}" />
+                <Setter Property="Padding" Value="12" />
+                <Setter Property="Background" Value="{ThemeResource LayerBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Grid>
-                                <Border
-                                    x:Name="FocusRing"
-                                    BorderBrush="{ThemeResource AccentBrush}"
-                                    BorderThickness="2"
-                                    CornerRadius="12"
-                                    Opacity="0" />
+                            <Grid x:Name="RootGrid">
                                 <Border
                                     x:Name="CardContainer"
                                     Padding="{TemplateBinding Padding}"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="12">
-                                    <ContentPresenter />
+                                    CornerRadius="10">
+                                    <ContentPresenter
+                                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                                 </Border>
+                                <Border
+                                    x:Name="HoverOverlay"
+                                    Background="{ThemeResource ShellAccentBrush}"
+                                    CornerRadius="10"
+                                    IsHitTestVisible="False"
+                                    Opacity="0" />
+                                <Border
+                                    x:Name="FocusRing"
+                                    BorderBrush="{ThemeResource ShellAccentBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="10"
+                                    IsHitTestVisible="False"
+                                    Opacity="0" />
                                 <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0.14" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0.24" Duration="0:0:0.04" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Opacity" To="0.42" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
                                     <VisualStateGroup x:Name="CheckStates">
                                         <VisualState x:Name="Unchecked">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource PanelBrush}" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource LayerBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderBrush">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource PanelHoverBrush}" />
-                                                </ObjectAnimationUsingKeyFrames>
-                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderThickness">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="1" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CardStrokeBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
                                         <VisualState x:Name="Checked">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource PanelHoverBrush}" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentSubtleBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderBrush">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AccentBrush}" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource ShellAccentBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderThickness">
                                                     <DiscreteObjectKeyFrame KeyTime="0" Value="2" />
@@ -92,11 +109,12 @@
                                     <VisualStateGroup x:Name="FocusStates">
                                         <VisualState x:Name="Focused">
                                             <Storyboard>
-                                                <DoubleAnimation
-                                                    Storyboard.TargetName="FocusRing"
-                                                    Storyboard.TargetProperty="Opacity"
-                                                    To="1"
-                                                    Duration="0:0:0.05" />
+                                                <DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerFocused">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05" />
                                             </Storyboard>
                                         </VisualState>
                                         <VisualState x:Name="Unfocused" />
@@ -107,6 +125,7 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
             <Style
                 x:Key="BotSelectionCardStyle"
                 TargetType="RadioButton">
@@ -117,34 +136,60 @@
                 <Setter Property="Height" Value="154" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderBrush" Value="#4DFFFFFF" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Grid>
+                            <Grid x:Name="RootGrid">
                                 <Border
                                     x:Name="CardContainer"
                                     Padding="{TemplateBinding Padding}"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="12">
-                                    <ContentPresenter />
+                                    CornerRadius="14">
+                                    <ContentPresenter
+                                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                                 </Border>
+                                <Border
+                                    x:Name="HoverOverlay"
+                                    Background="{ThemeResource HoverOverlayBrush}"
+                                    CornerRadius="14"
+                                    IsHitTestVisible="False"
+                                    Opacity="0" />
                                 <Border
                                     x:Name="FocusRing"
                                     BorderBrush="{ThemeResource AccentBrush}"
                                     BorderThickness="2"
-                                    CornerRadius="12"
+                                    CornerRadius="14"
                                     IsHitTestVisible="False"
                                     Opacity="0" />
                                 <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0.14" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0.24" Duration="0:0:0.04" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Opacity" To="0.68" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
                                     <VisualStateGroup x:Name="CheckStates">
                                         <VisualState x:Name="Unchecked">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderBrush">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#4DFFFFFF" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource CardStrokeBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderThickness">
                                                     <DiscreteObjectKeyFrame KeyTime="0" Value="1" />
@@ -168,6 +213,11 @@
                                                 <DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05" />
                                             </Storyboard>
                                         </VisualState>
+                                        <VisualState x:Name="PointerFocused">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05" />
+                                            </Storyboard>
+                                        </VisualState>
                                         <VisualState x:Name="Unfocused" />
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
@@ -176,19 +226,31 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
             <Style
                 x:Key="ModeSelectionCardStyle"
                 BasedOn="{StaticResource SelectionCardBaseStyle}"
                 TargetType="RadioButton">
                 <Setter Property="Width" Value="140" />
-                <Setter Property="Height" Value="54" />
+                <Setter Property="MinHeight" Value="54" />
                 <Setter Property="Padding" Value="10" />
             </Style>
         </Grid.Resources>
+
+        <Image
+            x:Name="ShellBackdropImage"
+            AutomationProperties.AccessibilityView="Raw"
+            IsHitTestVisible="False"
+            Opacity="{ThemeResource ShellBackdropOpacity}"
+            Source="{ThemeResource ShellBackdropSource}"
+            Stretch="UniformToFill" />
+        <Border
+            Background="{ThemeResource BackdropScrimBrush}"
+            IsHitTestVisible="False" />
+
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <Grid x:Name="PageLayout" Padding="24">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -198,55 +260,35 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Spacing="8">
+                    <StackPanel MaxWidth="560" Spacing="5">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <FontIcon
-                                FontSize="28"
-                                Foreground="{ThemeResource AccentBrush}"
-                                Glyph="&#xE7FC;" />
+                            <Border
+                                Width="34"
+                                Height="34"
+                                Background="{ThemeResource ShellAccentSubtleBrush}"
+                                CornerRadius="17">
+                                <FontIcon
+                                    FontSize="19"
+                                    Foreground="{ThemeResource ShellAccentBrush}"
+                                    Glyph="&#xE7FC;" />
+                            </Border>
                             <TextBlock
                                 Foreground="{ThemeResource TextBrush}"
-                                FontSize="30"
+                                FontSize="28"
                                 FontWeight="SemiBold"
                                 Text="FH6 Open Assist" />
                         </StackPanel>
                         <TextBlock
-                            MaxWidth="620"
                             Foreground="{ThemeResource MutedTextBrush}"
-                            Text="Automação assistida com controle seguro por F8 e F9."
+                            Text="Escolha uma automação, confira o preparo e acompanhe cada etapa em um só lugar."
                             TextWrapping="Wrap" />
-                        <StackPanel Margin="0,6,0,0" Orientation="Horizontal" Spacing="8">
-                            <Button
-                                AutomationProperties.Name="Abrir instruções do BOT selecionado"
-                                Click="InstructionsButton_Click">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon FontSize="14" Glyph="&#xE897;" />
-                                    <TextBlock Text="Instruções" />
-                                </StackPanel>
-                            </Button>
-                            <Button
-                                x:Name="ActivateBotButton"
-                                AutomationProperties.HelpText="Arma o BOT selecionado para execução com F8"
-                                Click="ActivateBotButton_Click"
-                                Content="Ativar BOT"
-                                Style="{StaticResource AccentButtonStyle}" />
-                            <ComboBox
-                                x:Name="ThemeComboBox"
-                                Width="138"
-                                AutomationProperties.Name="Tema da interface"
-                                PlaceholderText="Tema"
-                                SelectionChanged="ThemeComboBox_SelectionChanged">
-                                <ComboBoxItem Content="Sistema" Tag="System" />
-                                <ComboBoxItem Content="Claro" Tag="Light" />
-                                <ComboBoxItem Content="Escuro" Tag="Dark" />
-                            </ComboBox>
-                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel
@@ -255,54 +297,66 @@
                         Margin="16,0,0,0"
                         Orientation="Horizontal"
                         Spacing="8">
-                        <Border
-                            MinWidth="92"
-                            Padding="14,9"
-                            Background="{ThemeResource PanelBrush}"
-                            CornerRadius="8">
-                            <StackPanel>
-                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="SP" />
-                                <TextBlock x:Name="SkillPointsText" Foreground="{ThemeResource TextBrush}" FontSize="20" FontWeight="SemiBold" Text="—" />
+                        <Border Style="{StaticResource DashboardMetricStyle}">
+                            <StackPanel MinWidth="70">
+                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="10" Text="SP" />
+                                <TextBlock
+                                    x:Name="SkillPointsText"
+                                    AutomationProperties.Name="Pontos de habilidade detectados"
+                                    Foreground="{ThemeResource TextBrush}"
+                                    FontSize="17"
+                                    FontWeight="SemiBold"
+                                    Text="—" />
                             </StackPanel>
                         </Border>
-                        <Border
-                            MinWidth="146"
-                            Padding="14,9"
-                            Background="{ThemeResource PanelBrush}"
-                            CornerRadius="8">
-                            <StackPanel>
-                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="CRÉDITOS" />
-                                <TextBlock x:Name="CreditsText" Foreground="{ThemeResource TextBrush}" FontSize="20" FontWeight="SemiBold" Text="—" />
+                        <Border Style="{StaticResource DashboardMetricStyle}">
+                            <StackPanel MinWidth="112">
+                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="10" Text="CRÉDITOS" />
+                                <TextBlock
+                                    x:Name="CreditsText"
+                                    AutomationProperties.Name="Créditos detectados"
+                                    Foreground="{ThemeResource TextBrush}"
+                                    FontSize="17"
+                                    FontWeight="SemiBold"
+                                    Text="—" />
                             </StackPanel>
                         </Border>
-                        <Border
-                            Padding="14,10"
-                            Background="{ThemeResource PanelBrush}"
-                            CornerRadius="8"
-                            VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="{ThemeResource StatusIdleBrush}" />
-                                <TextBlock x:Name="StatusText" Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="Parado" />
+                        <Border Style="{StaticResource DashboardMetricStyle}">
+                            <StackPanel MinWidth="90" Orientation="Horizontal" Spacing="7">
+                                <Ellipse
+                                    x:Name="StatusDot"
+                                    Width="9"
+                                    Height="9"
+                                    VerticalAlignment="Center"
+                                    Fill="{ThemeResource StatusIdleBrush}" />
+                                <TextBlock
+                                    x:Name="StatusText"
+                                    Foreground="{ThemeResource TextBrush}"
+                                    FontWeight="SemiBold"
+                                    Text="Parado" />
                             </StackPanel>
                         </Border>
+                        <ComboBox
+                            x:Name="ThemeComboBox"
+                            Width="118"
+                            AutomationProperties.Name="Tema da interface"
+                            PlaceholderText="Tema"
+                            SelectionChanged="ThemeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Sistema" Tag="System" />
+                            <ComboBoxItem Content="Claro" Tag="Light" />
+                            <ComboBoxItem Content="Escuro" Tag="Dark" />
+                        </ComboBox>
                     </StackPanel>
+                    <Border
+                        Grid.Row="2"
+                        Grid.ColumnSpan="2"
+                        Height="2"
+                        Margin="0,16,0,0"
+                        Background="{ThemeResource ShellSunsetGradientBrush}"
+                        CornerRadius="1" />
                 </Grid>
 
-                <InfoBar
-                    x:Name="ViGEmInfoBar"
-                    Grid.Row="1"
-                    Margin="0,16,0,0"
-                    IsClosable="False"
-                    IsOpen="False"
-                    Message="Os demais BOTs seguem disponíveis em primeiro plano. O Farm de CR exige ViGEmBus para o ajuste analógico; o segundo plano também depende dele."
-                    Severity="Warning"
-                    Title="Segundo plano indisponível">
-                    <InfoBar.ActionButton>
-                        <Button Click="RetryViGEmButton_Click" Content="Tentar novamente" />
-                    </InfoBar.ActionButton>
-                </InfoBar>
-
-                <Grid x:Name="MainWorkArea" Grid.Row="2" Margin="0,18,0,0">
+                <Grid x:Name="MainWorkArea" Grid.Row="1" Margin="0,16,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="MainTopRow" Height="Auto" />
                         <RowDefinition x:Name="MainGapRow" Height="0" />
@@ -315,365 +369,584 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel x:Name="BotSelectionPanel" Spacing="10">
-                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="18" FontWeight="SemiBold" Text="Escolha um BOT" />
+                        <StackPanel Margin="0,0,0,2" Spacing="2">
+                            <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="18" FontWeight="SemiBold" Text="Automações" />
+                            <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Selecione um BOT para preparar a sessão." />
+                        </StackPanel>
 
                         <RadioButton
                             x:Name="SpMacro"
+                            AutomationProperties.HelpText="Seleciona a automação de pontos de habilidade"
+                            AutomationProperties.Name="Skill Points"
+                            Checked="Macro_Checked"
                             GroupName="Macros"
                             Style="{StaticResource BotSelectionCardStyle}"
-                            Tag="FarmarSp"
-                            Checked="Macro_Checked">
-                            <Grid>
-                                <Border
-                                    x:Name="SpBotImageFrame"
-                                    CornerRadius="11">
-                                    <Grid>
-                                        <Image
-                                            x:Name="SpMacroImageGray"
-                                            Source="ms-appx:///Assets/UI/Skill_Points.png"
-                                            Stretch="UniformToFill" />
-                                        <Image
-                                            x:Name="SpMacroImageColor"
-                                            Opacity="0"
-                                            Source="ms-appx:///Assets/UI/Skill_Points.png"
-                                            Stretch="UniformToFill" />
-                                        <Border x:Name="SpMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
-                                        <Border
-                                            x:Name="SpMacroImageGlint"
-                                            Width="180"
-                                            Height="300"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Top"
-                                            Background="{StaticResource BotImageGlintBrush}"
-                                            IsHitTestVisible="False"
-                                            Opacity="0"
-                                            RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <RotateTransform Angle="-22" />
-                                            </Border.RenderTransform>
-                                        </Border>
-                                        <StackPanel
-                                            Margin="16,0"
-                                            VerticalAlignment="Center"
-                                            Spacing="4">
-                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="1 · Skill Points" />
+                            Tag="FarmarSp">
+                            <Border x:Name="SpBotImageFrame" CornerRadius="13">
+                                <Grid>
+                                    <Image
+                                        x:Name="SpMacroImageGray"
+                                        Source="ms-appx:///Assets/UI/Skill_Points.png"
+                                        Stretch="UniformToFill" />
+                                    <Image
+                                        x:Name="SpMacroImageColor"
+                                        Opacity="0"
+                                        Source="ms-appx:///Assets/UI/Skill_Points.png"
+                                        Stretch="UniformToFill" />
+                                    <Border x:Name="SpMacroImageOverlay" Background="{ThemeResource BotImageTextOverlayBrush}" />
+                                    <Border
+                                        x:Name="SpMacroImageGlint"
+                                        Width="180"
+                                        Height="300"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{StaticResource BotImageGlintBrush}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-22" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Grid Margin="16,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 01" />
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
                                             <TextBlock
-                                                Foreground="#E6FFFFFF"
+                                                x:Name="SpCardTitleText"
+                                                Foreground="{ThemeResource BotCardForegroundBrush}"
+                                                FontSize="18"
+                                                FontWeight="SemiBold"
+                                                Text="Skill Points" />
+                                            <TextBlock
+                                                x:Name="SpCardDescriptionText"
+                                                Foreground="{ThemeResource BotCardMutedForegroundBrush}"
                                                 FontSize="12"
+                                                MaxLines="2"
                                                 Text="Farma pontos de habilidade com corrida e repetição assistida."
                                                 TextWrapping="Wrap" />
-                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: SP" />
                                         </StackPanel>
+                                        <TextBlock
+                                            x:Name="SpCardResourceText"
+                                            Grid.Row="2"
+                                            Foreground="{ThemeResource BotCardAccentBrush}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Text="Recurso · SP" />
                                     </Grid>
-                                </Border>
-                            </Grid>
+                                </Grid>
+                            </Border>
                         </RadioButton>
 
                         <RadioButton
                             x:Name="CrMacro"
+                            AutomationProperties.HelpText="Seleciona a automação de créditos"
+                            AutomationProperties.Name="Farm de CR"
+                            Checked="Macro_Checked"
                             GroupName="Macros"
                             Style="{StaticResource BotSelectionCardStyle}"
-                            Tag="Farmar200kMin"
-                            Checked="Macro_Checked">
-                            <Grid>
-                                <Border
-                                    x:Name="CrBotImageFrame"
-                                    CornerRadius="11">
-                                    <Grid>
-                                        <Image
-                                            x:Name="CrMacroImageGray"
-                                            Source="ms-appx:///Assets/UI/CR_Icon.png"
-                                            Stretch="UniformToFill" />
-                                        <Image
-                                            x:Name="CrMacroImageColor"
-                                            Opacity="0"
-                                            Source="ms-appx:///Assets/UI/CR_Icon.png"
-                                            Stretch="UniformToFill" />
-                                        <Border x:Name="CrMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
-                                        <Border
-                                            x:Name="CrMacroImageGlint"
-                                            Width="180"
-                                            Height="300"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Top"
-                                            Background="{StaticResource BotImageGlintBrush}"
-                                            IsHitTestVisible="False"
-                                            Opacity="0"
-                                            RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <RotateTransform Angle="-22" />
-                                            </Border.RenderTransform>
-                                        </Border>
-                                        <StackPanel
-                                            Margin="16,0"
-                                            VerticalAlignment="Center"
-                                            Spacing="4">
-                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="2 · Farm de CR" />
+                            Tag="Farmar200kMin">
+                            <Border x:Name="CrBotImageFrame" CornerRadius="13">
+                                <Grid>
+                                    <Image
+                                        x:Name="CrMacroImageGray"
+                                        Source="ms-appx:///Assets/UI/CR_Icon.png"
+                                        Stretch="UniformToFill" />
+                                    <Image
+                                        x:Name="CrMacroImageColor"
+                                        Opacity="0"
+                                        Source="ms-appx:///Assets/UI/CR_Icon.png"
+                                        Stretch="UniformToFill" />
+                                    <Border x:Name="CrMacroImageOverlay" Background="{ThemeResource BotImageTextOverlayBrush}" />
+                                    <Border
+                                        x:Name="CrMacroImageGlint"
+                                        Width="180"
+                                        Height="300"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{StaticResource BotImageGlintBrush}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-22" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Grid Margin="16,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 02" />
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
                                             <TextBlock
-                                                Foreground="#E6FFFFFF"
+                                                x:Name="CrCardTitleText"
+                                                Foreground="{ThemeResource BotCardForegroundBrush}"
+                                                FontSize="18"
+                                                FontWeight="SemiBold"
+                                                Text="Farm de CR" />
+                                            <TextBlock
+                                                x:Name="CrCardDescriptionText"
+                                                Foreground="{ThemeResource BotCardMutedForegroundBrush}"
                                                 FontSize="12"
+                                                MaxLines="2"
                                                 Text="Executa a rota calibrada para ganho recorrente de créditos."
                                                 TextWrapping="Wrap" />
-                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: créditos" />
                                         </StackPanel>
+                                        <TextBlock
+                                            x:Name="CrCardResourceText"
+                                            Grid.Row="2"
+                                            Foreground="{ThemeResource BotCardAccentBrush}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Text="Recurso · créditos" />
                                     </Grid>
-                                </Border>
-                            </Grid>
+                                </Grid>
+                            </Border>
                         </RadioButton>
 
                         <RadioButton
                             x:Name="WheelspinMacro"
+                            AutomationProperties.HelpText="Seleciona a automação WheelSpin Mad Mike"
+                            AutomationProperties.Name="WheelSpin Mad Mike"
+                            Checked="Macro_Checked"
                             GroupName="Macros"
                             Style="{StaticResource BotSelectionCardStyle}"
-                            Tag="FarmarWheelspins"
-                            Checked="Macro_Checked">
-                            <Grid>
-                                <Border
-                                    x:Name="WheelspinBotImageFrame"
-                                    CornerRadius="11">
-                                    <Grid>
-                                        <Image
-                                            x:Name="WheelspinMacroImageGray"
-                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
-                                            Stretch="UniformToFill" />
-                                        <Image
-                                            x:Name="WheelspinMacroImageColor"
-                                            Opacity="0"
-                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
-                                            Stretch="UniformToFill" />
-                                        <Border x:Name="WheelspinMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
-                                        <Border
-                                            x:Name="WheelspinMacroImageGlint"
-                                            Width="180"
-                                            Height="300"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Top"
-                                            Background="{StaticResource BotImageGlintBrush}"
-                                            IsHitTestVisible="False"
-                                            Opacity="0"
-                                            RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <RotateTransform Angle="-22" />
-                                            </Border.RenderTransform>
-                                        </Border>
-                                        <StackPanel
-                                            Margin="16,0"
-                                            VerticalAlignment="Center"
-                                            Spacing="4">
-                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="3 · WheelSpin Mad Mike" />
+                            Tag="FarmarWheelspins">
+                            <Border x:Name="WheelspinBotImageFrame" CornerRadius="13">
+                                <Grid>
+                                    <Image
+                                        x:Name="WheelspinMacroImageGray"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Image
+                                        x:Name="WheelspinMacroImageColor"
+                                        Opacity="0"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Border x:Name="WheelspinMacroImageOverlay" Background="{ThemeResource BotImageTextOverlayBrush}" />
+                                    <Border
+                                        x:Name="WheelspinMacroImageGlint"
+                                        Width="180"
+                                        Height="300"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{StaticResource BotImageGlintBrush}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-22" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Grid Margin="16,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 03" />
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
                                             <TextBlock
-                                                Foreground="#E6FFFFFF"
+                                                x:Name="WheelspinCardTitleText"
+                                                Foreground="{ThemeResource BotCardForegroundBrush}"
+                                                FontSize="18"
+                                                FontWeight="SemiBold"
+                                                Text="WheelSpin Mad Mike" />
+                                            <TextBlock
+                                                x:Name="WheelspinCardDescriptionText"
+                                                Foreground="{ThemeResource BotCardMutedForegroundBrush}"
                                                 FontSize="12"
+                                                MaxLines="2"
                                                 Text="Compra, melhora e gira carros pela sequência Mad Mike."
                                                 TextWrapping="Wrap" />
-                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recursos: SP e créditos" />
                                         </StackPanel>
+                                        <TextBlock
+                                            x:Name="WheelspinCardResourceText"
+                                            Grid.Row="2"
+                                            Foreground="{ThemeResource BotCardAccentBrush}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Text="Recursos · SP e créditos" />
                                     </Grid>
-                                </Border>
-                            </Grid>
+                                </Grid>
+                            </Border>
                         </RadioButton>
 
                         <RadioButton
                             x:Name="SpendWheelspinMacro"
-                            AutomationProperties.Name="4 · Gastar Wheelspins"
+                            AutomationProperties.HelpText="Seleciona a automação para gastar Wheelspins"
+                            AutomationProperties.Name="Gastar Wheelspins"
+                            Checked="Macro_Checked"
                             GroupName="Macros"
                             Style="{StaticResource BotSelectionCardStyle}"
-                            Tag="GastarWheelspins"
-                            Checked="Macro_Checked">
-                            <Grid>
-                                <Border
-                                    x:Name="SpendWheelspinBotImageFrame"
-                                    CornerRadius="11">
-                                    <Grid>
-                                        <Image
-                                            x:Name="SpendWheelspinMacroImageGray"
-                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
-                                            Stretch="UniformToFill" />
-                                        <Image
-                                            x:Name="SpendWheelspinMacroImageColor"
-                                            Opacity="0"
-                                            Source="ms-appx:///Assets/UI/WheelSpin.jpg"
-                                            Stretch="UniformToFill" />
-                                        <Border x:Name="SpendWheelspinMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
-                                        <Border
-                                            x:Name="SpendWheelspinMacroImageGlint"
-                                            Width="180"
-                                            Height="300"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Top"
-                                            Background="{StaticResource BotImageGlintBrush}"
-                                            IsHitTestVisible="False"
-                                            Opacity="0"
-                                            RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <RotateTransform Angle="-22" />
-                                            </Border.RenderTransform>
-                                        </Border>
-                                        <StackPanel
-                                            Margin="16,0"
-                                            VerticalAlignment="Center"
-                                            Spacing="4">
-                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="4 · Gastar Wheelspins" />
+                            Tag="GastarWheelspins">
+                            <Border x:Name="SpendWheelspinBotImageFrame" CornerRadius="13">
+                                <Grid>
+                                    <Image
+                                        x:Name="SpendWheelspinMacroImageGray"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Image
+                                        x:Name="SpendWheelspinMacroImageColor"
+                                        Opacity="0"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Border x:Name="SpendWheelspinMacroImageOverlay" Background="{ThemeResource BotImageTextOverlayBrush}" />
+                                    <Border
+                                        x:Name="SpendWheelspinMacroImageGlint"
+                                        Width="180"
+                                        Height="300"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{StaticResource BotImageGlintBrush}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-22" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Grid Margin="16,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 04" />
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
                                             <TextBlock
-                                                Foreground="#E6FFFFFF"
+                                                x:Name="SpendWheelspinCardTitleText"
+                                                Foreground="{ThemeResource BotCardForegroundBrush}"
+                                                FontSize="18"
+                                                FontWeight="SemiBold"
+                                                Text="Gastar Wheelspins" />
+                                            <TextBlock
+                                                x:Name="SpendWheelspinCardDescriptionText"
+                                                Foreground="{ThemeResource BotCardMutedForegroundBrush}"
                                                 FontSize="12"
+                                                MaxLines="2"
                                                 Text="Gira Super Wheelspins e Wheelspins com confirmação visual."
                                                 TextWrapping="Wrap" />
-                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: Wheelspins" />
                                         </StackPanel>
+                                        <TextBlock
+                                            x:Name="SpendWheelspinCardResourceText"
+                                            Grid.Row="2"
+                                            Foreground="{ThemeResource BotCardAccentBrush}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Text="Recurso · Wheelspins" />
                                     </Grid>
-                                </Border>
-                            </Grid>
+                                </Grid>
+                            </Border>
                         </RadioButton>
-
-                        <Border
-                            Width="320"
-                            Margin="0,6,0,0"
-                            Padding="16"
-                            HorizontalAlignment="Left"
-                            Background="{ThemeResource PanelBrush}"
-                            CornerRadius="8">
-                            <StackPanel Spacing="8">
-                                <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="16" FontWeight="SemiBold" Text="Modo de execução" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <RadioButton
-                                        x:Name="ForegroundMode"
-                                        GroupName="InputModes"
-                                        Style="{StaticResource ModeSelectionCardStyle}"
-                                        Tag="Foreground"
-                                        Checked="InputMode_Checked">
-                                        <TextBlock
-                                            Foreground="{ThemeResource TextBrush}"
-                                            FontSize="12"
-                                            FontWeight="SemiBold"
-                                            Text="Primeiro plano" />
-                                    </RadioButton>
-                                    <RadioButton
-                                        x:Name="BackgroundMode"
-                                        GroupName="InputModes"
-                                        Style="{StaticResource ModeSelectionCardStyle}"
-                                        Tag="BackgroundExperimental"
-                                        Checked="InputMode_Checked">
-                                        <TextBlock
-                                            Foreground="{ThemeResource TextBrush}"
-                                            FontSize="12"
-                                            FontWeight="SemiBold"
-                                            Text="Segundo plano" />
-                                    </RadioButton>
-                                </StackPanel>
-                                <TextBlock
-                                    x:Name="InputModeDescription"
-                                    Foreground="{ThemeResource MutedTextBrush}"
-                                    FontSize="12"
-                                    TextWrapping="Wrap" />
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Ellipse x:Name="ViGEmStatusDot" Width="8" Height="8" Fill="{ThemeResource StatusIdleBrush}" VerticalAlignment="Center" />
-                                    <TextBlock
-                                        x:Name="ViGEmStatusText"
-                                        Foreground="{ThemeResource MutedTextBrush}"
-                                        FontSize="12"
-                                        Text="Validando controle virtual…"
-                                        TextWrapping="Wrap" />
-                                </StackPanel>
-                                <HyperlinkButton
-                                    x:Name="ViGEmOfficialLink"
-                                    HorizontalAlignment="Left"
-                                    AutomationProperties.Name="Abrir página oficial do ViGEmBus"
-                                    Click="ViGEmOfficialLink_Click"
-                                    Content="Abrir página oficial do ViGEmBus"
-                                    Visibility="Collapsed" />
-                            </StackPanel>
-                        </Border>
-                        <Border
-                            Width="320"
-                            Padding="12,8"
-                            HorizontalAlignment="Left"
-                            Background="{ThemeResource PanelBrush}"
-                            BorderBrush="{ThemeResource PanelHoverBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Spacing="1">
-                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="12" FontWeight="SemiBold" Text="☕ Apoie o projeto" />
-                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="Contribuição voluntária para manter o FH6 Open Assist." />
-                                </StackPanel>
-                                <Button
-                                    Grid.Column="1"
-                                    Margin="10,0,0,0"
-                                    Padding="10,4"
-                                    AutomationProperties.HelpText="Copiar chave PIX de apoio ao projeto"
-                                    Click="CopySupportPixButton_Click"
-                                    Content="Copiar PIX"
-                                    VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
                     </StackPanel>
 
                     <Border
-                        x:Name="LogPanel"
+                        x:Name="AssistantPanel"
                         Grid.Column="2"
-                        Height="480"
-                        Padding="16"
-                        Background="{ThemeResource PanelBrush}"
-                        CornerRadius="8"
+                        MinHeight="480"
+                        Padding="20"
+                        Style="{StaticResource DashboardPanelStyle}"
                         VerticalAlignment="Top">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="12" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="18" FontWeight="SemiBold" Text="Log da execução" />
-                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Eventos, calibração e liberação segura de entradas." />
+                        <StackPanel Spacing="14">
+                                <StackPanel Spacing="5">
+                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" Text="BOT SELECIONADO" />
+                                    <TextBlock
+                                        x:Name="ContextBotNameText"
+                                        Foreground="{ThemeResource TextBrush}"
+                                        FontSize="24"
+                                        FontWeight="SemiBold"
+                                        Text="Skill Points"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        x:Name="ContextBotDescriptionText"
+                                        Foreground="{ThemeResource MutedTextBrush}"
+                                        Text="Farma pontos de habilidade com corrida e repetição assistida."
+                                        TextWrapping="Wrap" />
                                 </StackPanel>
-                                <Button Grid.Column="1" Click="ClearLog_Click" Content="Limpar" />
-                            </Grid>
-                            <TextBox
-                                x:Name="LogTextBox"
-                                Grid.Row="2"
-                                Padding="12"
-                                AcceptsReturn="True"
-                                AutomationProperties.Name="Log da execução"
-                                Background="{ThemeResource LogBackgroundBrush}"
-                                BorderBrush="{ThemeResource LogBorderBrush}"
-                                FontFamily="Cascadia Mono, Consolas"
-                                FontSize="12"
-                                Foreground="{ThemeResource LogTextBrush}"
-                                IsReadOnly="True"
-                                ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                TextWrapping="Wrap" />
-                        </Grid>
+
+                                <StackPanel
+                                    x:Name="ContextBotBadgesPanel"
+                                    Orientation="Horizontal"
+                                    Spacing="6">
+                                    <Border Background="{ThemeResource ShellAccentSubtleBrush}" Style="{StaticResource DashboardBadgeStyle}">
+                                        <TextBlock Foreground="{ThemeResource ShellAccentForegroundBrush}" FontSize="11" FontWeight="SemiBold" Text="SP" />
+                                    </Border>
+                                    <Border Style="{StaticResource DashboardBadgeStyle}">
+                                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="11" Text="Primeiro plano" />
+                                    </Border>
+                                </StackPanel>
+
+                                <Border Height="1" Background="{ThemeResource CardStrokeBrush}" />
+
+                                <Grid ColumnSpacing="20">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="15" FontWeight="SemiBold" Text="Antes de ativar" />
+                                        <StackPanel
+                                            x:Name="ContextBotRequirementsPanel"
+                                            AutomationProperties.Name="Pré-requisitos do BOT selecionado"
+                                            Spacing="7">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Subaru Impreza 22B-STI Version" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Assistências ativadas" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Não iniciar dentro da garagem" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Border Padding="10" Background="{ThemeResource LayerBrush}" CornerRadius="8">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" Text="TELA INICIAL" />
+                                                <TextBlock
+                                                    x:Name="ContextBotStartText"
+                                                    Foreground="{ThemeResource TextBrush}"
+                                                    FontSize="12"
+                                                    Text="Comece na rua, fora da garagem."
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="9">
+                                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="15" FontWeight="SemiBold" Text="Modo de execução" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <RadioButton
+                                                x:Name="ForegroundMode"
+                                                AutomationProperties.HelpText="Modo recomendado; pode trazer o Forza para frente"
+                                                AutomationProperties.Name="Primeiro plano"
+                                                Checked="InputMode_Checked"
+                                                GroupName="InputModes"
+                                                Style="{StaticResource ModeSelectionCardStyle}"
+                                                Tag="Foreground">
+                                                <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="12" FontWeight="SemiBold" Text="Primeiro plano" TextWrapping="Wrap" />
+                                            </RadioButton>
+                                            <RadioButton
+                                                x:Name="BackgroundMode"
+                                                AutomationProperties.HelpText="Modo experimental com captura e controle virtual"
+                                                AutomationProperties.Name="Segundo plano experimental"
+                                                Checked="InputMode_Checked"
+                                                GroupName="InputModes"
+                                                Style="{StaticResource ModeSelectionCardStyle}"
+                                                Tag="BackgroundExperimental">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="12" FontWeight="SemiBold" Text="Segundo plano" TextWrapping="Wrap" />
+                                                    <TextBlock Foreground="{ThemeResource WarningBrush}" FontSize="9" FontWeight="SemiBold" Text="EXPERIMENTAL" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </RadioButton>
+                                        </StackPanel>
+                                        <TextBlock
+                                            x:Name="InputModeDescription"
+                                            Foreground="{ThemeResource MutedTextBrush}"
+                                            FontSize="11"
+                                            TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Ellipse
+                                                x:Name="ViGEmStatusDot"
+                                                Width="8"
+                                                Height="8"
+                                                VerticalAlignment="Center"
+                                                Fill="{ThemeResource StatusIdleBrush}" />
+                                            <TextBlock
+                                                x:Name="ViGEmStatusText"
+                                                Foreground="{ThemeResource MutedTextBrush}"
+                                                FontSize="11"
+                                                Text="Validando controle virtual…"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <HyperlinkButton
+                                            x:Name="ViGEmOfficialLink"
+                                            Padding="0,3"
+                                            HorizontalAlignment="Left"
+                                            AutomationProperties.Name="Abrir página oficial do ViGEmBus"
+                                            Click="ViGEmOfficialLink_Click"
+                                            Content="Abrir página oficial do ViGEmBus"
+                                            FontSize="11"
+                                            Visibility="Collapsed" />
+                                        <InfoBar
+                                            x:Name="ViGEmInfoBar"
+                                            IsClosable="False"
+                                            IsOpen="False"
+                                            Message="Farm de CR e segundo plano dependem do controle virtual."
+                                            Severity="Warning"
+                                            Title="ViGEmBus indisponível">
+                                            <InfoBar.ActionButton>
+                                                <Button Click="RetryViGEmButton_Click" Content="Tentar novamente" />
+                                            </InfoBar.ActionButton>
+                                        </InfoBar>
+
+                                        <Border Height="1" Margin="0,2" Background="{ThemeResource CardStrokeBrush}" />
+                                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="15" FontWeight="SemiBold" Text="Sessão" />
+                                        <Grid ColumnSpacing="6" RowSpacing="6">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource DashboardMetricStyle}">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="9" Text="TEMPO" />
+                                                    <TextBlock x:Name="SessionElapsedText" Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="00:00:00" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="1" Style="{StaticResource DashboardMetricStyle}">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="9" Text="CICLOS" />
+                                                    <TextBlock x:Name="SessionCyclesText" Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Row="1" Style="{StaticResource DashboardMetricStyle}">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="9" Text="RECUPERAÇÕES" />
+                                                    <TextBlock x:Name="SessionRecoveriesText" Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource DashboardMetricStyle}">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="9" Text="FALHAS" />
+                                                    <TextBlock x:Name="SessionFailuresText" Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="0" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="9" FontWeight="SemiBold" Text="ETAPA ATUAL" />
+                                            <TextBlock
+                                                x:Name="SessionStageText"
+                                                AutomationProperties.LiveSetting="Polite"
+                                                Foreground="{ThemeResource TextBrush}"
+                                                FontSize="12"
+                                                Text="Aguardando ativação"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Height="1" Background="{ThemeResource CardStrokeBrush}" />
+
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button
+                                        x:Name="ActivateBotButton"
+                                        AutomationProperties.HelpText="Arma o BOT selecionado para execução com F8"
+                                        AutomationProperties.Name="Ativar BOT selecionado"
+                                        Click="ActivateBotButton_Click"
+                                        Content="Ativar BOT"
+                                        Style="{StaticResource SunsetAccentButtonStyle}" />
+                                    <Button
+                                        Grid.Column="1"
+                                        AutomationProperties.Name="Abrir instruções completas do BOT selecionado"
+                                        Click="InstructionsButton_Click"
+                                        Content="Instruções" />
+                                </Grid>
+                                <TextBlock
+                                    x:Name="DetailText"
+                                    Foreground="{ThemeResource MutedTextBrush}"
+                                    FontSize="11"
+                                    Text="Selecione um BOT para começar."
+                                    TextWrapping="Wrap" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="11" FontWeight="SemiBold" Text="☕ Apoie o projeto" />
+                                        <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="10" Text="Apoio voluntário; nenhuma funcionalidade depende dele." />
+                                    </StackPanel>
+                                    <Button
+                                        Grid.Column="1"
+                                        Padding="10,4"
+                                        AutomationProperties.HelpText="Copia a chave PIX de apoio voluntário"
+                                        AutomationProperties.Name="Copiar chave PIX"
+                                        Click="CopySupportPixButton_Click"
+                                        Content="Copiar PIX" />
+                                </Grid>
+
+                                <Expander
+                                    x:Name="LogExpander"
+                                    AutomationProperties.Name="Log da execução"
+                                    IsExpanded="False">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon FontSize="13" Glyph="&#xE9D9;" />
+                                            <TextBlock FontWeight="SemiBold" Text="Log da execução" />
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <Grid x:Name="LogPanel" Height="190" Margin="0,8,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="8" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="10" Text="Estados, decisões e liberação segura de entradas." />
+                                            <Button Grid.Column="1" Padding="8,2" Click="ClearLog_Click" Content="Limpar" />
+                                        </Grid>
+                                        <TextBox
+                                            x:Name="LogTextBox"
+                                            Grid.Row="2"
+                                            Padding="10"
+                                            AcceptsReturn="True"
+                                            AutomationProperties.Name="Conteúdo do log da execução"
+                                            Background="{ThemeResource LogBackgroundBrush}"
+                                            BorderBrush="{ThemeResource LogBorderBrush}"
+                                            FontFamily="Cascadia Mono, Consolas"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource LogTextBrush}"
+                                            IsReadOnly="True"
+                                            ScrollViewer.IsVerticalScrollChainingEnabled="True"
+                                            ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                            TextWrapping="Wrap" />
+                                    </Grid>
+                                </Expander>
+                        </StackPanel>
                     </Border>
                 </Grid>
 
-                <Grid Grid.Row="3" Margin="0,16,0,0">
+                <Grid Grid.Row="2" Margin="0,14,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock
-                        x:Name="DetailText"
                         Foreground="{ThemeResource MutedTextBrush}"
-                        Text="Selecione um BOT para começar."
+                        FontSize="11"
+                        Text="O jogo pode ficar coberto no segundo plano, mas nunca minimizado."
                         TextWrapping="Wrap" />
                     <TextBlock
                         Grid.Column="1"
                         Margin="16,0,0,0"
                         Foreground="{ThemeResource MutedTextBrush}"
-                        Text="F8 iniciar/pausar  ·  F9 encerrar" />
+                        FontSize="11"
+                        Text="F8 iniciar/interromper  ·  F9 encerrar" />
                 </Grid>
             </Grid>
         </ScrollViewer>
     </Grid>
 </Window>
-
