@@ -1,6 +1,7 @@
 {
   "profile": "pt-BR",
-  "notes": "Referências herdadas do protótipo Python. OCR é o detector principal; estas imagens ficam disponíveis para calibração e fallback.",
+  "runtimeUsage": "offline-reference-only",
+  "notes": "Referências herdadas para calibração offline. O runtime C# atual não executa template matching: usa OCR do Windows, visão clássica por geometria/cores e ONNX somente para a posição do Farm de CR.",
   "defaultThreshold": 0.60,
   "thresholds": {
     "cars_tab": 0.78,

@@ -10,3 +10,33 @@ updates:
       - automated
     commit-message:
       prefix: "deps"
+  - package-ecosystem: pip
+    directory: "/tools/cr-position-model"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: "deps"
+  - package-ecosystem: pip
+    directory: "/tools/vision"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: "deps"
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: "deps"
