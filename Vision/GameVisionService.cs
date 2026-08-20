@@ -252,26 +252,20 @@ public sealed class GameVisionService(
             ? await ocr.ReadAsync(frame.Bitmap, cancellationToken, region)
             : await ocr.ReadAsync(focused, cancellationToken);
         var ocrSource = focused is null ? "recorte colorido" : "recorte focado";
-        var numbers = ExtractNumbers(document.Text)
-            .Where(number => number >= 0 && number <= maximum)
-            .ToArray();
-        if (numbers.Length == 0 && focused is not null)
+        var selection = SelectCreditNumber(document, maximum);
+        if (selection.Value is null && focused is not null)
         {
             // O recorte colorido completo é barato e reconheceu corretamente
             // fontes pontilhadas que o binário amplo não conseguiu interpretar.
             document = await ocr.ReadAsync(frame.Bitmap, cancellationToken, region);
-            numbers = ExtractNumbers(document.Text)
-                .Where(number => number >= 0 && number <= maximum)
-                .ToArray();
+            selection = SelectCreditNumber(document, maximum);
             ocrSource = "recorte colorido";
         }
 
-        if (numbers.Length == 0)
+        if (selection.Value is null)
         {
             document = await ocr.ReadAsync(processed, cancellationToken);
-            numbers = ExtractNumbers(document.Text)
-                .Where(number => number >= 0 && number <= maximum)
-                .ToArray();
+            selection = SelectCreditNumber(document, maximum);
             ocrSource = "binário amplo";
         }
 
@@ -280,8 +274,8 @@ public sealed class GameVisionService(
             state,
             $"OCR amarelo ({ocrSource}): " +
             $"'{document.Text.Replace("\r", " ").Replace("\n", " ").Trim()}'; " +
-            $"candidatos: [{string.Join(", ", numbers)}].");
-        if (numbers.Length == 0)
+            $"candidatos: [{string.Join(", ", selection.Candidates)}]; {selection.Evidence}.");
+        if (selection.Value is null)
         {
             var path = capture.SaveDiagnostic(frame.Bitmap, workflow, state);
             var processedPath = capture.SaveDiagnostic(processed, workflow, $"{state}-Amarelo");
@@ -289,12 +283,13 @@ public sealed class GameVisionService(
                 ? null
                 : capture.SaveDiagnostic(focused, workflow, $"{state}-AmareloFocado");
             throw new CalibrationRequiredException(
-                $"Não foi possível ler o saldo amarelo em '{state}'. OCR: '{document.Text}'. " +
+                $"Não foi possível ler um saldo amarelo inequívoco de até {maximum:N0} " +
+                $"em '{state}'. OCR: '{document.Text}'. {selection.Evidence}. " +
                 $"Diagnósticos: {path}; processado: {processedPath}" +
                 (focusedPath is null ? string.Empty : $"; focado: {focusedPath}"));
         }
 
-        return numbers.Max();
+        return selection.Value.Value;
     }
 
     private static Bitmap? CreateFocusedYellowNumberBitmap(
@@ -508,6 +503,98 @@ public sealed class GameVisionService(
             .Where(value => value >= 0)
             .ToArray();
     }
+
+    public static IReadOnlyList<int> ExtractCreditNumbers(string text)
+    {
+        var candidates = new HashSet<int>();
+
+        // O OCR do HUD troca separadores de milhar com frequência. Reconstrua
+        // primeiro o sufixo estruturado (1-3 / 3 / 3 dígitos), sem atravessar
+        // letras ou linhas e sem concatenar o "1" do ícone à esquerda.
+        foreach (Match match in Regex.Matches(
+                     text,
+                     @"(?<!\d)(\d{1,3})[^\p{L}\d\r\n]{1,3}(\d{3})[^\p{L}\d\r\n]{1,3}(\d{3})(?!\d)(?![^\p{L}\d\r\n]{1,3}\d{3}(?!\d))"))
+        {
+            AddCandidate(string.Concat(
+                match.Groups[1].Value,
+                match.Groups[2].Value,
+                match.Groups[3].Value));
+        }
+
+        // Preserve os formatos já observados (18.227,399 e 19,109249) e
+        // aceite hífen/en-dash quando o OCR os usa no lugar de ponto/vírgula.
+        foreach (Match match in Regex.Matches(
+                     text,
+                     @"\d+(?:[.,\-\u2010\u2011\u2012\u2013\u2014\u2015]\d+)*"))
+        {
+            AddCandidate(Regex.Replace(match.Value, @"\D", string.Empty));
+        }
+
+        return candidates.ToArray();
+
+        void AddCandidate(string digits)
+        {
+            if (int.TryParse(digits, out var parsed) && parsed >= 0)
+            {
+                candidates.Add(parsed);
+            }
+        }
+    }
+
+    private static CreditNumberSelection SelectCreditNumber(
+        OcrDocument document,
+        int maximum)
+    {
+        var texts = document.Lines.Count > 0
+            ? document.Lines.Select(line => line.Text)
+            : [document.Text];
+        var candidates = texts
+            .SelectMany(ExtractCreditNumbers)
+            .Where(value => value >= 0 && value <= maximum)
+            .Distinct()
+            .ToArray();
+
+        if (candidates.Length == 0)
+        {
+            return new CreditNumberSelection(
+                null,
+                candidates,
+                $"nenhum candidato plausível na faixa 0..{maximum:N0}");
+        }
+
+        if (candidates.Length == 1)
+        {
+            return new CreditNumberSelection(
+                candidates[0],
+                candidates,
+                $"saldo selecionado {candidates[0]:N0}");
+        }
+
+        var ordered = candidates
+            .OrderByDescending(GetDigitCount)
+            .ThenByDescending(value => value)
+            .ToArray();
+        if (GetDigitCount(ordered[0]) >= GetDigitCount(ordered[1]) + 3)
+        {
+            return new CreditNumberSelection(
+                ordered[0],
+                candidates,
+                $"saldo dominante selecionado {ordered[0]:N0}");
+        }
+
+        return new CreditNumberSelection(
+            null,
+            candidates,
+            "leitura fragmentada ou ambígua; outra fonte OCR é obrigatória");
+    }
+
+    private static int GetDigitCount(int value) =>
+        value == 0 ? 1 : (int)Math.Floor(Math.Log10(value)) + 1;
+
+    private sealed record CreditNumberSelection(
+        int? Value,
+        IReadOnlyList<int> Candidates,
+        string Evidence);
 
     public static string Normalize(string value)
     {

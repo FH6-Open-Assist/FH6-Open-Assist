@@ -16,6 +16,7 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     private const int PositionHandbrakeProbeMilliseconds = 550;
     private const int PositionHandbrakeFrameIntervalMilliseconds = 35;
     private const int PositionHandbrakeConsensusFrames = 3;
+    private const long MinimumMaximumPlausibleCreditGain = 2_000_000;
     // A gravação nominal usava 250 ms, mas captura + inferência faziam cada
     // passo durar ~896 ms. Com o ONNX atual mais rápido, 310 ms preservam esse
     // intervalo físico (aceleração + coasting) sem aumentar o hold de 550 ms.
@@ -56,7 +57,7 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             var creditsBefore = await TryReadConfirmedCreditsAsync(
                 context,
                 "CreditosAntes",
-                useHigherValue: true,
+                maximumPlausibleValue: null,
                 cancellationToken);
             if (creditsBefore is null)
             {
@@ -158,10 +159,16 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
             var outcomeMenu = await OpenAndDetectOutcomeMenuAsync(context, cancellationToken);
             if (outcomeMenu.Kind == GameContextKind.StreetMenu)
             {
+                var maximumPlausibleGain = Math.Max(
+                    MinimumMaximumPlausibleCreditGain,
+                    (long)Math.Max(1, context.Settings.CrFarm.MinimumSuccessfulCreditGain) * 10);
+                var maximumPlausibleCredits = Math.Min(
+                    999_999_999,
+                    creditsBefore.Value + maximumPlausibleGain);
                 var creditsAfter = await TryReadConfirmedCreditsAsync(
                     context,
                     "CreditosDepois",
-                    useHigherValue: false,
+                    maximumPlausibleValue: maximumPlausibleCredits,
                     cancellationToken);
                 if (creditsAfter is null)
                 {
@@ -176,13 +183,18 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
                 if (creditsAfter < creditsBefore)
                 {
+                    using var diagnosticFrame = await context.Capture.CaptureAsync(cancellationToken);
+                    var diagnosticPath = context.Capture.SaveDiagnostic(
+                        diagnosticFrame.Bitmap,
+                        Workflow,
+                        "CreditosDepoisRegressao");
                     context.CrFarmSamples.KeepPending(
                         attempt,
                         $"UnreliableCreditDelta:{creditsBefore}->{creditsAfter}",
                         outcomeMenu.Kind);
                     throw new CalibrationRequiredException(
                         $"A leitura de CR regrediu de {creditsBefore:N0} para {creditsAfter:N0}; " +
-                        "a tentativa permaneceu Pending e o BOT parou com segurança.");
+                        $"a tentativa permaneceu Pending e o BOT parou com segurança. Diagnóstico: {diagnosticPath}");
                 }
 
                 var delta = creditsAfter.Value - creditsBefore.Value;
@@ -1005,17 +1017,20 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     private static async Task<long?> TryReadCreditsAsync(
         AutomationContext context,
         string state,
+        long? maximumPlausibleValue,
         CancellationToken cancellationToken)
     {
         try
         {
             var credits = await context.Vision.ReadYellowNumberAsync(
                 new RectangleF(0.68f, 0.015f, 0.19f, 0.16f),
-                999_999_999,
+                checked((int)Math.Clamp(
+                    maximumPlausibleValue ?? 999_999_999,
+                    0,
+                    999_999_999)),
                 Workflow,
                 state,
                 cancellationToken);
-            context.Resources.SetCredits(credits, estimated: false);
             return credits;
         }
         catch (Exception exception) when (
@@ -1030,44 +1045,47 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     private static async Task<long?> TryReadConfirmedCreditsAsync(
         AutomationContext context,
         string state,
-        bool useHigherValue,
+        long? maximumPlausibleValue,
         CancellationToken cancellationToken)
     {
-        var readings = new List<long>(2);
-        for (var attempt = 1; attempt <= 3 && readings.Count < 2; attempt++)
+        var readings = new List<long>(3);
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
             var reading = await TryReadCreditsAsync(
                 context,
                 $"{state}{attempt}",
+                maximumPlausibleValue,
                 cancellationToken);
             if (reading is not null)
             {
                 readings.Add(reading.Value);
             }
 
-            if (attempt < 3 && readings.Count < 2)
+            var confirmed = readings
+                .GroupBy(value => value)
+                .FirstOrDefault(group => group.Count() >= 2);
+            if (confirmed is not null)
+            {
+                var value = confirmed.Key;
+                context.Resources.SetCredits(value, estimated: false);
+                context.Logger.State(
+                    Workflow,
+                    state,
+                    $"Consenso confirmado: [{string.Join(", ", readings.Select(item => item.ToString("N0")))}]; " +
+                    $"valor {value:N0}.");
+                return value;
+            }
+
+            if (attempt < 3)
             {
                 await Task.Delay(600, cancellationToken);
             }
         }
 
-        if (readings.Count < 2)
-        {
-            return null;
-        }
-
-        var first = readings[0];
-        var second = readings[1];
-        var confirmed = useHigherValue
-            ? Math.Max(first, second)
-            : Math.Min(first, second);
-        context.Resources.SetCredits(confirmed, estimated: false);
-        context.Logger.State(
-            Workflow,
-            state,
-            $"Leituras confirmadas: {first:N0} e {second:N0}; " +
-            $"valor conservador {confirmed:N0}.");
-        return confirmed;
+        context.Logger.Warn(
+            $"{state}: não houve consenso exato em até 3 leituras " +
+            $"([{string.Join(", ", readings.Select(value => value.ToString("N0")))}]).");
+        return null;
     }
 
     private static bool HasExitConfirmation(GameContextResult result)
