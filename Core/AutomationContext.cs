@@ -21,6 +21,7 @@ public sealed class AutomationContext
     public required CrPositionClassifier CrPosition { get; init; }
     public required CrFarmSampleCollector CrFarmSamples { get; init; }
     public required ResourceTracker Resources { get; init; }
+    public required SessionTelemetry Telemetry { get; init; }
     public required Func<MacroRunRequest, CancellationToken, Task> RunNestedAsync { get; set; }
 }
 

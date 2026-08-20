@@ -18,13 +18,6 @@ public enum MacroRunState
     CalibracaoNecessaria
 }
 
-public sealed record MacroDescriptor(
-    MacroKind Kind,
-    string Name,
-    string Description,
-    string ResourceSummary,
-    bool IsCalibrated = true);
-
 public sealed class CalibrationRequiredException(string message) : Exception(message);
 
 public sealed class AutomationFaultException(string message) : Exception(message);

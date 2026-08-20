@@ -21,6 +21,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             "Inicio",
             $"Início rápido na rua: Impreza 22B e Assistência Total são pré-requisitos. " +
             "Execução contínua até F8, sem estimar o saldo total de SP.");
+        context.Telemetry.UpdateStage(
+            "Preparando desafio",
+            "Abrindo o EventLab e localizando o desafio configurado.");
 
         await OpenEventLabChallengeWithVisionAsync(context, cancellationToken);
         await RunRaceLoopAsync(context, cancellationToken);
@@ -85,6 +88,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
     {
         const string workflow = "FarmarSP";
         context.Logger.State(workflow, "AbrirMenuRua", "Abrindo o menu da rua.");
+        context.Telemetry.UpdateStage(
+            "Abrindo menu da rua",
+            "Confirmando visualmente o menu antes de navegar até o EventLab.");
         var pauseMenuOpened = false;
         for (var attempt = 1; attempt <= 3 && !pauseMenuOpened; attempt++)
         {
@@ -132,6 +138,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             workflow,
             "CentralCriativa",
             "Procurando a aba Central Criativa com LB, sem mover o foco do Windows.");
+        context.Telemetry.UpdateStage(
+            "Central Criativa",
+            "Localizando a aba do EventLab por reconhecimento visual.");
         var creativeTabOpen = false;
         for (var attempt = 1; attempt <= 6 && !creativeTabOpen; attempt++)
         {
@@ -159,6 +168,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(workflow, "EventLab", "O banner EventLab está selecionado; abrindo com A.");
+        context.Telemetry.UpdateStage(
+            "EventLab",
+            "Abrindo a lista de desafios e preparando a busca pelo código configurado.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         _ = await context.Vision.WaitForAnyTextAsync(
             workflow,
@@ -179,6 +191,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             cancellationToken);
 
         context.Logger.State(workflow, "Buscar", "Abrindo filtros com Backspace.");
+        context.Telemetry.UpdateStage(
+            "Buscando desafio",
+            "Preenchendo e confirmando o código de compartilhamento.");
         await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
         _ = await context.Vision.WaitForAnyTextAsync(
             workflow,
@@ -243,6 +258,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             cancellationToken,
             TimeSpan.FromSeconds(20));
         context.Logger.State(workflow, "SelecionarEvento", "Selecionando o único evento retornado pela busca.");
+        context.Telemetry.UpdateStage(
+            "Carregando corrida",
+            "Desafio localizado; aguardando a apresentação e a contagem regressiva.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         context.Logger.State(
             workflow,
@@ -261,6 +279,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            context.Telemetry.UpdateStage(
+                "Corrida em andamento",
+                $"Corrida {race}: executando a sequência calibrada.");
             context.Logger.State(
                 workflow,
                 "Corrida",
@@ -280,6 +301,9 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
                 workflow,
                 "TentarNovamente",
                 "Resultado já está pronto pelo temporizador; pressionando Esc por 156 ms para tentar novamente.");
+            context.Telemetry.UpdateStage(
+                "Preparando nova corrida",
+                $"Corrida {race}: retornando para iniciar a próxima repetição.");
             await context.Input.TapAsync(GameKey.Escape, cancellationToken, 156);
             race++;
         }
