@@ -18,8 +18,8 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     private const int PositionHandbrakeConsensusFrames = 3;
     private const long MinimumMaximumPlausibleCreditGain = 2_000_000;
     // A gravação nominal usava 250 ms, mas captura + inferência faziam cada
-    // passo durar ~896 ms. Com o ONNX atual mais rápido, 310 ms preservam esse
-    // intervalo físico (aceleração + coasting) sem aumentar o hold do acelerador de 550 ms.
+    // passo durar ~896 ms. O orçamento de 310 ms preserva esse intervalo físico;
+    // uma sonda imediata agora elimina a janela cega sem alongar o passo quando erra.
     private const int PositionThrottleSettleMilliseconds = 310;
     private const int PreRaceReadyTimeoutMilliseconds = 8_000;
     private const int PreRaceStartConfirmationMilliseconds = 900;
@@ -673,6 +673,17 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
         CancellationToken cancellationToken)
     {
         var probability = await EvaluateSinglePositionProbabilityAsync(context, cancellationToken);
+        if (probability >= PositionCandidateThreshold)
+        {
+            var candidate = await EvaluateCandidatePositionAsync(
+                context,
+                probability,
+                immediateHandbrakeCts,
+                cancellationToken,
+                "posição inicial");
+            return candidate;
+        }
+
         context.Logger.State(
             Workflow,
             "EncaixarPlacas",
@@ -680,23 +691,49 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
         for (var index = 0; index < PositionThrottleRamp.Length; index++)
         {
-            if (probability >= PositionCandidateThreshold)
-            {
-                return await EvaluateCandidatePositionAsync(
-                    context,
-                    probability,
-                    immediateHandbrakeCts,
-                    cancellationToken);
-            }
-
             var throttle = PositionThrottleRamp[index];
             await context.Input.PulseAcceleratorAsync(
                 throttle,
                 PositionThrottleHoldMilliseconds,
                 cancellationToken);
-            await Task.Delay(PositionThrottleSettleMilliseconds, cancellationToken);
+            var settleStartedTimestamp = Stopwatch.GetTimestamp();
 
+            // Capture o primeiro frame disponível assim que o acelerador for solto.
+            // Se o carro cruzar a borda candidata, o KeyDown do freio acontece antes
+            // de logs e antes dos clones usados pelo consenso/dataset.
             probability = await EvaluateSinglePositionProbabilityAsync(context, cancellationToken);
+            if (probability >= PositionCandidateThreshold)
+            {
+                var candidate = await EvaluateCandidatePositionAsync(
+                    context,
+                    probability,
+                    immediateHandbrakeCts,
+                    cancellationToken,
+                    "sonda imediata",
+                    settleStartedTimestamp);
+                return candidate;
+            }
+
+            var settleBudget = TimeSpan.FromMilliseconds(PositionThrottleSettleMilliseconds);
+            var settleElapsed = Stopwatch.GetElapsedTime(settleStartedTimestamp);
+            if (settleElapsed < settleBudget)
+            {
+                await Task.Delay(settleBudget - settleElapsed, cancellationToken);
+
+                probability = await EvaluateSinglePositionProbabilityAsync(context, cancellationToken);
+                if (probability >= PositionCandidateThreshold)
+                {
+                    var candidate = await EvaluateCandidatePositionAsync(
+                        context,
+                        probability,
+                        immediateHandbrakeCts,
+                        cancellationToken,
+                        "sonda final",
+                        settleStartedTimestamp);
+                    return candidate;
+                }
+            }
+
             context.Logger.State(
                 Workflow,
                 "EncaixarPlacas",
@@ -704,34 +741,14 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 $"acelerador {throttle:P0}, encaixe Valid={probability:P1}.");
         }
 
-        if (probability >= PositionCandidateThreshold)
-        {
-            return await EvaluateCandidatePositionAsync(
-                context,
-                probability,
-                immediateHandbrakeCts,
-                cancellationToken);
-        }
-
-        var final = await EvaluatePositionAsync(
-            context,
-            cancellationToken,
-            frameIntervalMs: 80);
-        if (final.Prediction.Label != CrPositionLabel.Valid)
-        {
-            return (final.Prediction, final.Frames, null);
-        }
-
-        foreach (var frame in final.Frames)
-        {
-            frame.Dispose();
-        }
-
+        // Nunca autorize a partir de um consenso capturado com o carro livre.
+        // Depois da rampa, congele primeiro e só então forme a janela de 3 frames.
         return await EvaluateCandidatePositionAsync(
             context,
-            final.Prediction.ValidProbability,
+            probability,
             immediateHandbrakeCts,
-            cancellationToken);
+            cancellationToken,
+            "sonda final protegida");
     }
 
     private static async Task<(
@@ -741,7 +758,9 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
         AutomationContext context,
         double initialProbability,
         CancellationTokenSource immediateHandbrakeCts,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string probeOrigin,
+        long? acceleratorReleasedTimestamp = null)
     {
         var authorizationThreshold = Math.Max(
             MinimumPositionAuthorizationThreshold,
@@ -762,6 +781,18 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
         try
         {
+            var releaseToHandbrake = acceleratorReleasedTimestamp is long releasedTimestamp
+                ? Stopwatch.GetElapsedTime(releasedTimestamp).TotalMilliseconds
+                : (double?)null;
+            context.Logger.State(
+                Workflow,
+                "FreioMao",
+                $"Candidato detectado por {probeOrigin}; freio de mão acionado após o KeyDown. " +
+                (releaseToHandbrake is double measuredMilliseconds
+                    ? $"Soltura do acelerador -> freio: {measuredMilliseconds:F0} ms. "
+                    : string.Empty) +
+                $"Sem consenso ele é liberado em até {PositionHandbrakeProbeMilliseconds} ms; " +
+                "confirmado, permanece por pelo menos 25 s.");
             context.Logger.State(
                 Workflow,
                 "ProtegerEncaixe",
@@ -864,14 +895,7 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
     {
         // HoldAsync envia o KeyDown antes de retornar o Task. A confirmação
         // seguinte já captura o carro sob o freio, impedindo o rebote das placas.
-        var task = context.Input.HoldAsync(GameKey.Space, holdMilliseconds, cancellationToken);
-        context.Logger.State(
-            Workflow,
-            "FreioMao",
-            "Candidato de encaixe detectado; freio de mão acionado imediatamente. " +
-            $"Sem consenso ele é liberado em até {PositionHandbrakeProbeMilliseconds} ms; " +
-            "confirmado, permanece por pelo menos 25 s.");
-        return task;
+        return context.Input.HoldAsync(GameKey.Space, holdMilliseconds, cancellationToken);
     }
 
     private static async Task ReleaseCandidateHandbrakeAsync(
