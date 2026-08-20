@@ -231,7 +231,6 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                     $"CR: {creditsBefore:N0} -> {creditsAfter:N0} (delta {delta:+#,0;-#,0;0}; " +
                     $"mínimo {minimumSuccessfulGain:N0}); " +
                     $"Classification: {comparison}; Sample(s): {saved.Count}.");
-                await CloseStreetMenuAsync(context, cancellationToken);
                 if (groundTruth == CrAttemptGroundTruth.Invalid)
                 {
                     context.Logger.Warn(
