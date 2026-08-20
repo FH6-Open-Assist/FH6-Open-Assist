@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.Streams;
@@ -52,9 +53,11 @@ public sealed partial class MainWindow : Window
         FrameworkElement ImageHost,
         Image GrayImage,
         Image ColorImage,
+        FrameworkElement TextOverlay,
         FrameworkElement Glint);
 
     private const string ViGEmOfficialUrl = "https://github.com/nefarius/ViGEmBus/releases/latest";
+    private const string SupportPixKey = "48bf874c-3e3d-48d1-89eb-4cd11b679167";
 
     public MainWindow(UserPreferences preferences)
     {
@@ -197,6 +200,7 @@ public sealed partial class MainWindow : Window
             SpBotImageFrame,
             SpMacroImageGray,
             SpMacroImageColor,
+            SpMacroImageOverlay,
             SpMacroImageGlint);
 
         _botCards[MacroKind.Farmar200kMin] = new BotCardVisuals(
@@ -205,6 +209,7 @@ public sealed partial class MainWindow : Window
             CrBotImageFrame,
             CrMacroImageGray,
             CrMacroImageColor,
+            CrMacroImageOverlay,
             CrMacroImageGlint);
 
         _botCards[MacroKind.FarmarWheelspins] = new BotCardVisuals(
@@ -213,6 +218,7 @@ public sealed partial class MainWindow : Window
             WheelspinBotImageFrame,
             WheelspinMacroImageGray,
             WheelspinMacroImageColor,
+            WheelspinMacroImageOverlay,
             WheelspinMacroImageGlint);
 
         try
@@ -289,6 +295,8 @@ public sealed partial class MainWindow : Window
             var isSelected = card.Kind == selectedKind;
             var colorVisual = ElementCompositionPreview.GetElementVisual(card.ColorImage);
             colorVisual.Opacity = isSelected ? 1f : 0f;
+            var overlayVisual = ElementCompositionPreview.GetElementVisual(card.TextOverlay);
+            overlayVisual.Opacity = isSelected ? 0.42f : 1f;
             SetGlintOpacity(card, 0f);
         }
     }
@@ -315,47 +323,52 @@ public sealed partial class MainWindow : Window
         _botAnimationCancellation = new CancellationTokenSource();
         var token = _botAnimationCancellation.Token;
 
-        await AnimateColorLayerOpacityAsync(previousCard, 0f, TimeSpan.FromMilliseconds(200), token);
+        if (_reduceMotion)
+        {
+            await Task.WhenAll(
+                AnimateElementOpacityAsync(previousCard.ColorImage, 0f, TimeSpan.FromMilliseconds(300), token),
+                AnimateElementOpacityAsync(previousCard.TextOverlay, 1f, TimeSpan.FromMilliseconds(300), token),
+                AnimateElementOpacityAsync(nextCard.ColorImage, 1f, TimeSpan.FromMilliseconds(250), token),
+                AnimateElementOpacityAsync(nextCard.TextOverlay, 0.42f, TimeSpan.FromMilliseconds(250), token));
+            SetGlintOpacity(nextCard, 0f);
+            return;
+        }
+
+        await Task.WhenAll(
+            AnimateElementOpacityAsync(previousCard.ColorImage, 0f, TimeSpan.FromMilliseconds(300), token),
+            AnimateElementOpacityAsync(previousCard.TextOverlay, 1f, TimeSpan.FromMilliseconds(300), token),
+            AnimateElementOpacityAsync(nextCard.ColorImage, 0.5f, TimeSpan.FromMilliseconds(650), token),
+            AnimateElementOpacityAsync(nextCard.TextOverlay, 0.42f, TimeSpan.FromMilliseconds(650), token),
+            AnimateGlintPassAsync(nextCard, TimeSpan.FromMilliseconds(650), token));
         if (token.IsCancellationRequested)
         {
             return;
         }
 
-        if (_reduceMotion)
+        await Task.Delay(100);
+        if (token.IsCancellationRequested)
         {
-            await AnimateColorLayerOpacityAsync(nextCard, 1f, TimeSpan.FromMilliseconds(160), token);
-            SetGlintOpacity(nextCard, 0f);
             return;
         }
 
-        var sequence = new[] { 0.32f, 0.7f, 1f };
-        foreach (var target in sequence)
-        {
-            await AnimateColorLayerOpacityAsync(nextCard, target, TimeSpan.FromMilliseconds(160), token);
-            if (token.IsCancellationRequested)
-            {
-                return;
-            }
-
-            if (target < 1f)
-            {
-                await AnimateGlintPassAsync(nextCard, token);
-            }
-        }
-
-        await AnimateColorLayerOpacityAsync(nextCard, 1f, TimeSpan.FromMilliseconds(80), token);
+        await Task.WhenAll(
+            AnimateElementOpacityAsync(nextCard.ColorImage, 1f, TimeSpan.FromMilliseconds(650), token),
+            AnimateGlintPassAsync(nextCard, TimeSpan.FromMilliseconds(650), token));
     }
 
-    private static async Task AnimateColorLayerOpacityAsync(BotCardVisuals card, float targetOpacity, TimeSpan duration, CancellationToken token)
+    private static async Task AnimateElementOpacityAsync(FrameworkElement element, float targetOpacity, TimeSpan duration, CancellationToken token)
     {
-        var visual = ElementCompositionPreview.GetElementVisual(card.ColorImage);
+        var visual = ElementCompositionPreview.GetElementVisual(element);
         visual.StopAnimation(nameof(Visual.Opacity));
 
         var compositor = visual.Compositor;
         var animation = compositor.CreateScalarKeyFrameAnimation();
         animation.Duration = duration;
         animation.InsertKeyFrame(0f, (float)visual.Opacity);
-        animation.InsertKeyFrame(1f, targetOpacity);
+        animation.InsertKeyFrame(
+            1f,
+            targetOpacity,
+            compositor.CreateCubicBezierEasingFunction(new Vector2(0.22f, 1f), new Vector2(0.36f, 1f)));
 
         var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
         var tcs = new TaskCompletionSource();
@@ -377,7 +390,7 @@ public sealed partial class MainWindow : Window
         visual.Opacity = targetOpacity;
     }
 
-    private async Task AnimateGlintPassAsync(BotCardVisuals card, CancellationToken token)
+    private async Task AnimateGlintPassAsync(BotCardVisuals card, TimeSpan duration, CancellationToken token)
     {
         if (token.IsCancellationRequested)
         {
@@ -399,14 +412,18 @@ public sealed partial class MainWindow : Window
         visual.Opacity = 0f;
 
         var move = compositor.CreateVector3KeyFrameAnimation();
-        move.Duration = TimeSpan.FromMilliseconds(280);
+        move.Duration = duration;
         move.InsertKeyFrame(0f, new Vector3(-glintWidth, -hostHeight, 0));
-        move.InsertKeyFrame(1f, new Vector3(hostWidth, hostHeight, 0));
+        move.InsertKeyFrame(
+            1f,
+            new Vector3(hostWidth, hostHeight, 0),
+            compositor.CreateCubicBezierEasingFunction(new Vector2(0.22f, 1f), new Vector2(0.36f, 1f)));
 
         var glow = compositor.CreateScalarKeyFrameAnimation();
         glow.Duration = move.Duration;
         glow.InsertKeyFrame(0f, 0f);
-        glow.InsertKeyFrame(0.15f, 0.52f);
+        glow.InsertKeyFrame(0.32f, 0.46f);
+        glow.InsertKeyFrame(0.72f, 0.32f);
         glow.InsertKeyFrame(1f, 0f);
 
         visual.StopAnimation(nameof(Visual.Offset));
@@ -450,6 +467,14 @@ public sealed partial class MainWindow : Window
     }
 
     private void ActivateBotButton_Click(object sender, RoutedEventArgs e) => _coordinator.ArmSelected();
+
+    private void CopySupportPixButton_Click(object sender, RoutedEventArgs e)
+    {
+        var package = new DataPackage();
+        package.SetText(SupportPixKey);
+        Clipboard.SetContent(package);
+        _logger.Info("Chave PIX de apoio copiada para a área de transferência.");
+    }
 
     private async void InstructionsButton_Click(object sender, RoutedEventArgs e)
     {

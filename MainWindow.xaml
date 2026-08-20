@@ -16,10 +16,20 @@
             <LinearGradientBrush
                 x:Key="BotImageGlintBrush"
                 StartPoint="0,0"
-                EndPoint="1,1">
+                EndPoint="1,0">
                 <GradientStop Color="#00FFFFFF" Offset="0" />
-                <GradientStop Color="#A8FFFFFF" Offset="0.5" />
+                <GradientStop Color="#00FFFFFF" Offset="0.24" />
+                <GradientStop Color="#88FFFFFF" Offset="0.5" />
+                <GradientStop Color="#00FFFFFF" Offset="0.76" />
                 <GradientStop Color="#00FFFFFF" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush
+                x:Key="BotImageTextOverlayBrush"
+                StartPoint="0,0"
+                EndPoint="0,1">
+                <GradientStop Color="#2E000000" Offset="0" />
+                <GradientStop Color="#68000000" Offset="0.55" />
+                <GradientStop Color="#59000000" Offset="1" />
             </LinearGradientBrush>
             <Style
                 x:Key="SelectionCardBaseStyle"
@@ -99,17 +109,80 @@
             </Style>
             <Style
                 x:Key="BotSelectionCardStyle"
-                BasedOn="{StaticResource SelectionCardBaseStyle}"
                 TargetType="RadioButton">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
                 <Setter Property="Width" Value="320" />
                 <Setter Property="Height" Value="154" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="#4DFFFFFF" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Grid>
+                                <Border
+                                    x:Name="CardContainer"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="12">
+                                    <ContentPresenter />
+                                </Border>
+                                <Border
+                                    x:Name="FocusRing"
+                                    BorderBrush="{ThemeResource AccentBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="12"
+                                    IsHitTestVisible="False"
+                                    Opacity="0" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CheckStates">
+                                        <VisualState x:Name="Unchecked">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#4DFFFFFF" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderThickness">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="1" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Checked">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AccentBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="CardContainer" Storyboard.TargetProperty="BorderThickness">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="2" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="FocusStates">
+                                        <VisualState x:Name="Focused">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Unfocused" />
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
             <Style
                 x:Key="ModeSelectionCardStyle"
                 BasedOn="{StaticResource SelectionCardBaseStyle}"
                 TargetType="RadioButton">
-                <Setter Property="Width" Value="320" />
-                <Setter Property="Height" Value="84" />
+                <Setter Property="Width" Value="140" />
+                <Setter Property="Height" Value="54" />
+                <Setter Property="Padding" Value="10" />
             </Style>
         </Grid.Resources>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -251,16 +324,9 @@
                             Tag="FarmarSp"
                             Checked="Macro_Checked">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="108" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
                                 <Border
                                     x:Name="SpBotImageFrame"
-                                    Width="96"
-                                    Height="96"
-                                    CornerRadius="10"
-                                    VerticalAlignment="Top">
+                                    CornerRadius="11">
                                     <Grid>
                                         <Image
                                             x:Name="SpMacroImageGray"
@@ -271,24 +337,35 @@
                                             Opacity="0"
                                             Source="ms-appx:///Assets/UI/Skill_Points.png"
                                             Stretch="UniformToFill" />
+                                        <Border x:Name="SpMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
                                         <Border
                                             x:Name="SpMacroImageGlint"
-                                            Width="130"
+                                            Width="180"
+                                            Height="300"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
                                             Background="{StaticResource BotImageGlintBrush}"
                                             IsHitTestVisible="False"
                                             Opacity="0"
-                                            CornerRadius="6" />
+                                            RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="-22" />
+                                            </Border.RenderTransform>
+                                        </Border>
+                                        <StackPanel
+                                            Margin="16,0"
+                                            VerticalAlignment="Center"
+                                            Spacing="4">
+                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="1 · Skill Points" />
+                                            <TextBlock
+                                                Foreground="#E6FFFFFF"
+                                                FontSize="12"
+                                                Text="Farma pontos de habilidade com corrida e repetição assistida."
+                                                TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: SP" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
-                                <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="4">
-                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="1 · Skill Points" />
-                                    <TextBlock
-                                        Foreground="{ThemeResource MutedTextBrush}"
-                                        FontSize="12"
-                                        Text="Farma pontos de habilidade com corrida e repetição assistida."
-                                        TextWrapping="Wrap" />
-                                    <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" Text="Recurso: SP" />
-                                </StackPanel>
                             </Grid>
                         </RadioButton>
 
@@ -299,16 +376,9 @@
                             Tag="Farmar200kMin"
                             Checked="Macro_Checked">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="108" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
                                 <Border
                                     x:Name="CrBotImageFrame"
-                                    Width="96"
-                                    Height="96"
-                                    CornerRadius="10"
-                                    VerticalAlignment="Top">
+                                    CornerRadius="11">
                                     <Grid>
                                         <Image
                                             x:Name="CrMacroImageGray"
@@ -319,24 +389,35 @@
                                             Opacity="0"
                                             Source="ms-appx:///Assets/UI/CR_Icon.png"
                                             Stretch="UniformToFill" />
+                                        <Border x:Name="CrMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
                                         <Border
                                             x:Name="CrMacroImageGlint"
-                                            Width="130"
+                                            Width="180"
+                                            Height="300"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
                                             Background="{StaticResource BotImageGlintBrush}"
                                             IsHitTestVisible="False"
                                             Opacity="0"
-                                            CornerRadius="6" />
+                                            RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="-22" />
+                                            </Border.RenderTransform>
+                                        </Border>
+                                        <StackPanel
+                                            Margin="16,0"
+                                            VerticalAlignment="Center"
+                                            Spacing="4">
+                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="2 · Farm de CR" />
+                                            <TextBlock
+                                                Foreground="#E6FFFFFF"
+                                                FontSize="12"
+                                                Text="Executa a rota calibrada para ganho recorrente de créditos."
+                                                TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recurso: créditos" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
-                                <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="4">
-                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="2 · Farm de CR" />
-                                    <TextBlock
-                                        Foreground="{ThemeResource MutedTextBrush}"
-                                        FontSize="12"
-                                        Text="Executa a rota calibrada para ganho recorrente de créditos."
-                                        TextWrapping="Wrap" />
-                                    <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" Text="Recurso: créditos" />
-                                </StackPanel>
                             </Grid>
                         </RadioButton>
 
@@ -347,16 +428,9 @@
                             Tag="FarmarWheelspins"
                             Checked="Macro_Checked">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="108" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
                                 <Border
                                     x:Name="WheelspinBotImageFrame"
-                                    Width="96"
-                                    Height="96"
-                                    CornerRadius="10"
-                                    VerticalAlignment="Top">
+                                    CornerRadius="11">
                                     <Grid>
                                         <Image
                                             x:Name="WheelspinMacroImageGray"
@@ -367,54 +441,73 @@
                                             Opacity="0"
                                             Source="ms-appx:///Assets/UI/WheelSpin.jpg"
                                             Stretch="UniformToFill" />
+                                        <Border x:Name="WheelspinMacroImageOverlay" Background="{StaticResource BotImageTextOverlayBrush}" />
                                         <Border
                                             x:Name="WheelspinMacroImageGlint"
-                                            Width="130"
+                                            Width="180"
+                                            Height="300"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
                                             Background="{StaticResource BotImageGlintBrush}"
                                             IsHitTestVisible="False"
                                             Opacity="0"
-                                            CornerRadius="6" />
+                                            RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="-22" />
+                                            </Border.RenderTransform>
+                                        </Border>
+                                        <StackPanel
+                                            Margin="16,0"
+                                            VerticalAlignment="Center"
+                                            Spacing="4">
+                                            <TextBlock Foreground="White" FontSize="17" FontWeight="SemiBold" Text="3 · WheelSpin Mad Mike" />
+                                            <TextBlock
+                                                Foreground="#E6FFFFFF"
+                                                FontSize="12"
+                                                Text="Compra, melhora e gira carros pela sequência Mad Mike."
+                                                TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" FontWeight="SemiBold" Text="Recursos: SP e créditos" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
-                                <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="4">
-                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontWeight="SemiBold" Text="3 · WheelSpin Mad Mike" />
-                                    <TextBlock
-                                        Foreground="{ThemeResource MutedTextBrush}"
-                                        FontSize="12"
-                                        Text="Compra, melhora e gira carros pela sequência Mad Mike."
-                                        TextWrapping="Wrap" />
-                                    <TextBlock Foreground="{ThemeResource AccentBrush}" FontSize="12" Text="Recursos: SP e créditos" />
-                                </StackPanel>
                             </Grid>
                         </RadioButton>
 
-                        <Border Margin="0,6,0,0" Padding="16" Background="{ThemeResource PanelBrush}" CornerRadius="8">
+                        <Border
+                            Width="320"
+                            Margin="0,6,0,0"
+                            Padding="16"
+                            HorizontalAlignment="Left"
+                            Background="{ThemeResource PanelBrush}"
+                            CornerRadius="8">
                             <StackPanel Spacing="8">
                                 <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="16" FontWeight="SemiBold" Text="Modo de execução" />
-                                <RadioButton
-                                    x:Name="ForegroundMode"
-                                    GroupName="InputModes"
-                                    Style="{StaticResource ModeSelectionCardStyle}"
-                                    Tag="Foreground"
-                                    Checked="InputMode_Checked">
-                                    <TextBlock
-                                        Foreground="{ThemeResource TextBrush}"
-                                        FontSize="12"
-                                        FontWeight="SemiBold"
-                                        Text="Primeiro plano · teclado/mouse" />
-                                </RadioButton>
-                                <RadioButton
-                                    x:Name="BackgroundMode"
-                                    GroupName="InputModes"
-                                    Style="{StaticResource ModeSelectionCardStyle}"
-                                    Tag="BackgroundExperimental"
-                                    Checked="InputMode_Checked">
-                                    <TextBlock
-                                        Foreground="{ThemeResource TextBrush}"
-                                        FontSize="12"
-                                        FontWeight="SemiBold"
-                                        Text="Segundo plano · experimental" />
-                                </RadioButton>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <RadioButton
+                                        x:Name="ForegroundMode"
+                                        GroupName="InputModes"
+                                        Style="{StaticResource ModeSelectionCardStyle}"
+                                        Tag="Foreground"
+                                        Checked="InputMode_Checked">
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextBrush}"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Text="Primeiro plano" />
+                                    </RadioButton>
+                                    <RadioButton
+                                        x:Name="BackgroundMode"
+                                        GroupName="InputModes"
+                                        Style="{StaticResource ModeSelectionCardStyle}"
+                                        Tag="BackgroundExperimental"
+                                        Checked="InputMode_Checked">
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextBrush}"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Text="Segundo plano" />
+                                    </RadioButton>
+                                </StackPanel>
                                 <TextBlock
                                     x:Name="InputModeDescription"
                                     Foreground="{ThemeResource MutedTextBrush}"
@@ -437,6 +530,33 @@
                                     Content="Abrir página oficial do ViGEmBus"
                                     Visibility="Collapsed" />
                             </StackPanel>
+                        </Border>
+                        <Border
+                            Width="320"
+                            Padding="12,8"
+                            HorizontalAlignment="Left"
+                            Background="{ThemeResource PanelBrush}"
+                            BorderBrush="{ThemeResource PanelHoverBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="1">
+                                    <TextBlock Foreground="{ThemeResource TextBrush}" FontSize="12" FontWeight="SemiBold" Text="☕ Apoie o projeto" />
+                                    <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="Contribuição voluntária para manter o FH6 Open Assist." />
+                                </StackPanel>
+                                <Button
+                                    Grid.Column="1"
+                                    Margin="10,0,0,0"
+                                    Padding="10,4"
+                                    AutomationProperties.HelpText="Copiar chave PIX de apoio ao projeto"
+                                    Click="CopySupportPixButton_Click"
+                                    Content="Copiar PIX"
+                                    VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
                     </StackPanel>
 
