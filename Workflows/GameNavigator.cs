@@ -12,6 +12,7 @@ public sealed class GameNavigator(AutomationContext context)
 {
     private const string Workflow = "Navegação";
     private const int MasterySkillPointsOcrScale = 3;
+    private const int TravelCardOcrScale = 2;
     private const int MaximumPauseTabMoves = 6;
     private const int PauseTabPulseMilliseconds = 12;
     private const int PauseTabSettleMilliseconds = 900;
@@ -22,6 +23,7 @@ public sealed class GameNavigator(AutomationContext context)
     private const double PauseTabUnderlineLimeRatio = 0.60;
     private const double TravelCardOutlineRatio = 0.78;
     private const double WelcomeContinueOutlineRatio = 0.80;
+    private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
     private static readonly RectangleF TravelYesRegion = new(0.318f, 0.508f, 0.360f, 0.064f);
     private static readonly RectangleF EventExitCardFocusRegion = new(0.72f, 0.232f, 0.16f, 0.018f);
     private static readonly RectangleF EventExitYesRegion = new(0.32f, 0.51f, 0.36f, 0.06f);
@@ -2332,8 +2334,17 @@ public sealed class GameNavigator(AutomationContext context)
 
             if (observation < maximumObservations)
             {
-                var document = await context.Vision.ReadScreenAsync(cancellationToken);
-                normalized = GameVisionService.Normalize(document.Text);
+                var detected = await context.GameContext.DetectAsync(cancellationToken);
+                normalized = GameVisionService.Normalize(detected.Document.Text);
+                if (detected.Kind == GameContextKind.StreetMenu)
+                {
+                    return false;
+                }
+
+                if (detected.Kind == GameContextKind.Garage)
+                {
+                    return true;
+                }
             }
         }
 
@@ -3053,10 +3064,16 @@ public sealed class GameNavigator(AutomationContext context)
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
         var recent = new Queue<TravelCardObservation>(3);
         var bestOutline = 0d;
+        TravelCardObservation? lastObservation = null;
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var observation = await context.Vision.AnalyzeScreenAsync(AnalyzeTravelCard, cancellationToken);
+            var observation = await context.Vision.AnalyzeScreenWithScaledRegionsAsync(
+                [TravelCardRegion],
+                requestedScale: TravelCardOcrScale,
+                AnalyzeTravelCard,
+                cancellationToken);
+            lastObservation = observation;
             bestOutline = Math.Max(bestOutline, observation.OutlineRatio);
             recent.Enqueue(observation);
             if (recent.Count > 3)
@@ -3078,40 +3095,37 @@ public sealed class GameNavigator(AutomationContext context)
 
         using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
         var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, Workflow, "ConfirmarCartaoViagem");
-        throw new CalibrationRequiredException(
-            "A aba Meu Horizon foi confirmada, mas o texto estável e o contorno lime do cartão de viagem " +
-            $"não coincidiram em 2/3 capturas. Melhor contorno={bestOutline:P1}. Diagnóstico: {diagnostic}");
-    }
-
-    private static TravelCardObservation AnalyzeTravelCard(Bitmap bitmap, OcrDocument document)
-    {
-        TravelCardObservation best = new(false, 0, 0, 0);
-        foreach (var line in document.Lines)
+        var observedText = lastObservation?.OcrText ?? string.Empty;
+        if (observedText.Length > 160)
         {
-            var centerY = line.Center.Y / (double)bitmap.Height;
-            if (centerY is < 0.24 or > 0.92)
-            {
-                continue;
-            }
-
-            var normalized = GameVisionService.Normalize(line.Text);
-            if (!TravelCardAliases.Any(alias => normalized.Contains(alias, StringComparison.Ordinal)))
-            {
-                continue;
-            }
-
-            var outline = BestTravelCardOutlineRatio(bitmap, line);
-            if (!best.TextVisible || outline > best.OutlineRatio)
-            {
-                best = new TravelCardObservation(
-                    true,
-                    outline,
-                    line.Center.X / (double)bitmap.Width,
-                    line.Center.Y / (double)bitmap.Height);
-            }
+            observedText = observedText[..160] + "…";
         }
 
-        return best;
+        throw new CalibrationRequiredException(
+            "A aba Meu Horizon foi confirmada, mas o texto estável e o contorno lime do cartão de viagem " +
+            $"não coincidiram em 2/3 capturas. Melhor contorno={bestOutline:P1}; " +
+            $"último OCR regional='{observedText}'. Diagnóstico: {diagnostic}");
+    }
+
+    private static TravelCardObservation AnalyzeTravelCard(
+        Bitmap bitmap,
+        OcrDocument _,
+        IReadOnlyList<OcrDocument> scaledRegions)
+    {
+        if (scaledRegions.Count != 1)
+        {
+            throw new ArgumentException(
+                "A confirmação do cartão de viagem exige uma região OCR dedicada.",
+                nameof(scaledRegions));
+        }
+
+        var cardText = GameVisionService.Normalize(scaledRegions[0].Text);
+        return new TravelCardObservation(
+            HasAny(cardText, TravelCardAliases),
+            LimeHorizontalBorderRatio(bitmap, TravelCardRegion),
+            TravelCardRegion.Left + TravelCardRegion.Width / 2,
+            TravelCardRegion.Top + TravelCardRegion.Height / 2,
+            cardText);
     }
 
     private static bool HasStableFocusedTravelCard(IEnumerable<TravelCardObservation> observations)
@@ -3142,34 +3156,6 @@ public sealed class GameNavigator(AutomationContext context)
         }
 
         return false;
-    }
-
-    private static double BestTravelCardOutlineRatio(Bitmap bitmap, OcrLine line)
-    {
-        ReadOnlySpan<float> widths = [0.28f, 0.40f, 0.52f, 0.66f];
-        ReadOnlySpan<float> heights = [0.12f, 0.18f, 0.26f, 0.34f];
-        ReadOnlySpan<float> verticalOffsets = [-0.12f, -0.06f, 0, 0.06f];
-        var centerX = (float)(line.Center.X / (double)bitmap.Width);
-        var lineCenterY = (float)(line.Center.Y / (double)bitmap.Height);
-        var best = 0d;
-        foreach (var width in widths)
-        {
-            foreach (var height in heights)
-            {
-                foreach (var offset in verticalOffsets)
-                {
-                    var centerY = lineCenterY + offset;
-                    var region = new RectangleF(
-                        Math.Clamp(centerX - width / 2, 0, 1 - width),
-                        Math.Clamp(centerY - height / 2, 0, 1 - height),
-                        width,
-                        height);
-                    best = Math.Max(best, LimeHorizontalBorderRatio(bitmap, region));
-                }
-            }
-        }
-
-        return best;
     }
 
     private static double LimeHorizontalBorderRatio(Bitmap bitmap, RectangleF normalizedRegion)
@@ -3537,7 +3523,8 @@ public sealed class GameNavigator(AutomationContext context)
         bool TextVisible,
         double OutlineRatio,
         double CenterX,
-        double CenterY);
+        double CenterY,
+        string OcrText);
 
     private sealed record TravelConfirmationObservation(bool DialogVisible, double YesLimeRatio);
 
