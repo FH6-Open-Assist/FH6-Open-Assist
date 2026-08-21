@@ -2334,8 +2334,17 @@ public sealed class GameNavigator(AutomationContext context)
 
             if (observation < maximumObservations)
             {
-                var document = await context.Vision.ReadScreenAsync(cancellationToken);
-                normalized = GameVisionService.Normalize(document.Text);
+                var detected = await context.GameContext.DetectAsync(cancellationToken);
+                normalized = GameVisionService.Normalize(detected.Document.Text);
+                if (detected.Kind == GameContextKind.StreetMenu)
+                {
+                    return false;
+                }
+
+                if (detected.Kind == GameContextKind.Garage)
+                {
+                    return true;
+                }
             }
         }
 
