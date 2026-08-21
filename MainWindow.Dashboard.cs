@@ -140,22 +140,33 @@ public sealed partial class MainWindow
         return badge;
     }
 
-    private Grid CreateRequirementRow(string requirement)
+    private Grid CreateRequirementRow(BotRequirement requirement)
     {
         var row = new Grid { ColumnSpacing = 7 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var prefix = requirement.Kind switch
+        {
+            BotRequirementKind.Automated => "Automático",
+            BotRequirementKind.Required => "Pré-requisito",
+            _ => "Aviso"
+        };
 
         var icon = new FontIcon
         {
             FontSize = 12,
-            Foreground = ThemeBrush("SuccessBrush"),
-            Glyph = "\uE73E",
+            Foreground = ThemeBrush(requirement.Kind switch
+            {
+                BotRequirementKind.Automated => "SuccessBrush",
+                BotRequirementKind.Required => "TextBrush",
+                _ => "WarningBrush"
+            }),
+            Glyph = requirement.Kind == BotRequirementKind.Advisory ? "\uE7BA" : "\uE73E",
             VerticalAlignment = VerticalAlignment.Center
         };
         var label = new TextBlock
         {
-            Text = requirement,
+            Text = $"{prefix} · {requirement.Text}",
             FontSize = 12,
             Foreground = ThemeBrush("MutedTextBrush"),
             TextWrapping = TextWrapping.Wrap,
@@ -164,7 +175,9 @@ public sealed partial class MainWindow
         Grid.SetColumn(label, 1);
         row.Children.Add(icon);
         row.Children.Add(label);
-        AutomationProperties.SetName(row, requirement);
+        AutomationProperties.SetName(
+            row,
+            $"{prefix}: {requirement.Text}");
         return row;
     }
 

@@ -18,7 +18,7 @@ Assistente de automação de código aberto para **Forza Horizon 6**, feito em W
 |---|---|---|
 | Skill Points | Farm de pontos de habilidade | Disponível |
 | Farm de CR | Ganho recorrente de créditos com validação conservadora | Disponível · requer ViGEmBus |
-| WheelSpin Mad Mike | Compra, Maestria e remoção assistida de carros | Disponível |
+| WheelSpin Mad Mike | Compra, Maestria, remoção e reabastecimento integrado de SP/CR | Disponível · requer ViGEmBus |
 | Gastar Wheelspins | Giro confirmado visualmente, sem compra automática | Disponível |
 | Segundo plano | WGC e controle virtual sem trazer o jogo para frente | Experimental |
 
@@ -65,27 +65,38 @@ Ao interromper, o fluxo atual é cancelado com segurança. Um novo `F8` inicia u
 
 ### 1 — Skill Points
 
-- Selecione o **Subaru Impreza 22B-STI Version**, de preferência com a árvore de habilidades desbloqueada.
-- Ative todas as assistências e vá para a rua.
+- Vá para a rua. O BOT confirma o carro atual e seleciona o **Subaru Impreza 22B-STI Version** em `Carros > Trocar de Carro` quando necessário.
+- Como aviso de pré-requisito, ative todas as assistências; essa configuração não é verificada dinamicamente.
+- A árvore de habilidades desbloqueada continua recomendada.
 - O BOT abre o desafio EventLab configurado e repete a corrida até `F8`.
 - Não inicie dentro da garagem.
 
+Somente um resultado de sucesso confirmado visualmente incrementa a contagem. Quando existe um saldo inicial conhecido, o painel atualiza o total como estimativa, marcado com `≈`, somando o valor configurado por corrida e respeitando o teto de 999 SP. Falha, cancelamento ou resultado inconclusivo não alteram esse contador. No reabastecimento chamado pelo WheelSpin, a estimativa define o número limitado de corridas, mas não autoriza a retomada: o BOT sai do evento, volta à garagem e precisa reler exatamente 999 SP.
+
 ### 2 — Farm de CR
 
-- Selecione o **Nissan S-Cargo S1 800**, sem tunagem.
-- Desative todas as assistências e coloque a dificuldade em **Imbatível**.
+- Vá para a rua. O BOT confirma o carro atual e seleciona o **Nissan S-Cargo exatamente S1 800** em `Carros > Trocar de Carro` quando necessário; outras S-Cargo, como `R 987`, são rejeitadas.
+- Como aviso de pré-requisito, use o carro sem tunagem, desative todas as assistências e coloque a dificuldade em **Imbatível**. Essas configurações não são verificadas dinamicamente.
 - Instale o **ViGEmBus**, inclusive para usar este BOT em primeiro plano.
-- Vá para a rua; não inicie dentro da garagem.
+- Não inicie dentro da garagem.
 
 O fluxo lê o saldo antes da tentativa, abre o evento, aproxima o carro lentamente e aciona um freio de mão protetivo assim que surge um candidato. O modelo ONNX só autoriza a continuidade após três frames sob o freio atingirem o limiar conservador. Depois de 25 segundos, o BOT reinicia a posição e conclui a corrida. Sucesso é confirmado pelo aumento real de CR; permanência inequívoca no menu do evento confirma falha operacional. OCR ou contextos inconclusivos causam recuperação limitada ou parada segura.
+
+Quando chamado pelo WheelSpin, o Farm de CR encerra o handoff somente depois que uma leitura confirmada atinge a meta recebida. O WheelSpin ainda retorna à garagem e faz uma releitura independente de SP e CR antes de autorizar outra compra.
 
 ### 3 — WheelSpin Mad Mike
 
 - A conta precisa ser **VIP**.
-- Tenha ao menos **100.000 CR** e **30 SP** por ciclo.
-- Comece na garagem, no menu **Campanha**.
+- Cada ciclo usa **100.000 CR** e **30 SP** nas configurações padrão; saldos insuficientes acionam o reabastecimento integrado antes de outra compra.
+- Mantenha o **ViGEmBus** funcional. O reabastecimento de CR usa aceleração analógica mesmo em primeiro plano.
+- Para permitir o reabastecimento automático de SP, use **Segundo plano experimental**; esse handoff precisa distinguir `Start` de `B` na saída do EventLab.
+- Comece na rua, no menu de pausa ou na garagem; o BOT normaliza a entrada e viaja para casa quando necessário.
 
-Cada ciclo lê os recursos, compra um Mad Mike, desbloqueia a Maestria, troca para outro carro e remove um Mad Mike compatível encontrado pelo filtro visual de modelo/preço. O fluxo não rastreia a identidade individual do carro recém-comprado; se já houver cópias iguais, uma delas pode ser removida. Use somente se aceita essa alteração destrutiva na garagem.
+Antes de cada lote, o WheelSpin relê os recursos. Se faltar SP para outro ciclo, ele registra a intenção de reabastecimento, sai da garagem, seleciona o Subaru 22B e encadeia o Farm de SP até 999. O retorno só é aceito após uma releitura exata; o contador persistido é limitado a seis tentativas, e uma execução interrompida no teto só pode continuar quando uma nova leitura exata comprova progresso além do último saldo salvo. Se faltar CR disponível após a reserva configurada, ele seleciona a Nissan S-Cargo S1 800 e encadeia o Farm de CR até pelo menos 10.000.000 CR — ou até uma meta maior necessária para preservar a reserva e pagar outro ciclo — antes de reler o saldo.
+
+O ciclo destrutivo mantém checkpoints de autorização da compra, compra confirmada e perk final confirmado. Em uma nova execução, a retomada só avança quando carro, SP, CR e estágio persistido formam um pós-estado compatível; checkpoints incompatíveis, simultâneos ou expirados interrompem o BOT antes de gastar SP, comprar ou remover. A intenção persistida específica do reabastecimento cobre SP; uma interrupção durante o Farm de CR é reavaliada pela nova leitura de saldo.
+
+Cada ciclo confirma o mesmo cartão Mad Mike por OCR e contorno verde, compra o carro, valida o nó Wheelspin e o débito exato de 30 SP, troca para outro carro e remove um Mad Mike compatível. A grade, a marca Mazda e as opções de remoção precisam permanecer visualmente confirmadas; qualquer conflito interrompe o BOT. O fluxo não rastreia a identidade individual do carro recém-comprado; se já houver cópias iguais, uma delas pode ser removida. Use somente se aceita essa alteração destrutiva na garagem.
 
 ### 4 — Gastar Wheelspins
 
@@ -99,7 +110,9 @@ Cada ciclo lê os recursos, compra um Mad Mike, desbloqueia a Maestria, troca pa
 - Windows 10 build 19041 ou superior, ou Windows 11, em x64.
 - Interface do jogo em português do Brasil e pacote de OCR correspondente disponível no Windows.
 - Resolução 16:9 recomendada e jogo aberto, renderizando e não minimizado.
-- ViGEmBus funcional para segundo plano e para o Farm de CR em qualquer modo.
+- ViGEmBus funcional para segundo plano, para o Farm de CR em qualquer modo e para o WheelSpin integrado.
+- O WheelSpin pode começar em primeiro plano, mas não reabastece SP nesse modo; para uma execução contínua com esse handoff, selecione o segundo plano experimental.
+- Carro, dificuldade e assistências são confirmados somente onde descrito: os carros requisito são selecionados e revalidados, enquanto dificuldade, tunagem e assistências continuam avisos sem leitura dinâmica.
 - Tempos de carregamento, resolução, FPS, atualizações do jogo e alterações de interface podem exigir nova calibração.
 
 ## Como funciona
@@ -107,7 +120,7 @@ Cada ciclo lê os recursos, compra um Mad Mike, desbloqueia a Maestria, troca pa
 | Camada | Responsabilidade |
 |---|---|
 | WinUI 3 | Interface, preferências, estados do BOT, log limitado e encerramento seguro |
-| `AutomationCoordinator` | Seleção, armação, cancelamento, erros e liberação final de entradas/captura |
+| `AutomationCoordinator` | Seleção, armação, cancelamento, handoff autorizado do WheelSpin para SP/CR e liberação final de entradas/captura |
 | Entrada Windows/ViGEm | Teclado e mouse validados no primeiro plano; controle virtual no segundo plano e aceleração analógica |
 | Windows Graphics Capture | Captura a janela por HWND apenas nos checkpoints e libera a sessão quando ociosa |
 | OCR do Windows | Lê menus, recursos, confirmações e contexto variável em português |

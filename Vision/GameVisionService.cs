@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -32,6 +33,32 @@ public sealed class GameVisionService(
         return analyze(frame.Bitmap, document);
     }
 
+    public async Task<TResult> AnalyzeScreenWithScaledRegionsAsync<TResult>(
+        IReadOnlyList<RectangleF> normalizedRegions,
+        int requestedScale,
+        Func<Bitmap, OcrDocument, IReadOnlyList<OcrDocument>, TResult> analyze,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(normalizedRegions);
+        ArgumentNullException.ThrowIfNull(analyze);
+        ArgumentOutOfRangeException.ThrowIfLessThan(requestedScale, 1);
+
+        using var frame = await capture.CaptureAsync(cancellationToken);
+        var document = await ocr.ReadAsync(frame.Bitmap, cancellationToken);
+        var regions = new OcrDocument[normalizedRegions.Count];
+        for (var index = 0; index < normalizedRegions.Count; index++)
+        {
+            regions[index] = await ReadScaledRegionFromBitmapAsync(
+                frame.Bitmap,
+                normalizedRegions[index],
+                requestedScale,
+                cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return analyze(frame.Bitmap, document, regions);
+    }
+
     public async Task<OcrDocument> ReadRegionAsync(
         RectangleF normalizedRegion,
         CancellationToken cancellationToken)
@@ -39,6 +66,54 @@ public sealed class GameVisionService(
         using var frame = await capture.CaptureAsync(cancellationToken);
         var region = ToPixels(frame.Bitmap, normalizedRegion);
         return await ocr.ReadAsync(frame.Bitmap, cancellationToken, region);
+    }
+
+    public async Task<OcrDocument> ReadScaledRegionAsync(
+        RectangleF normalizedRegion,
+        int requestedScale,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(requestedScale, 1);
+
+        using var frame = await capture.CaptureAsync(cancellationToken);
+        return await ReadScaledRegionFromBitmapAsync(
+            frame.Bitmap,
+            normalizedRegion,
+            requestedScale,
+            cancellationToken);
+    }
+
+    private async Task<OcrDocument> ReadScaledRegionFromBitmapAsync(
+        Bitmap bitmap,
+        RectangleF normalizedRegion,
+        int requestedScale,
+        CancellationToken cancellationToken)
+    {
+        var region = ToPixels(bitmap, normalizedRegion);
+        const int maximumOcrDimension = 2_400;
+        var maximumScale = Math.Min(
+            maximumOcrDimension / (double)region.Width,
+            maximumOcrDimension / (double)region.Height);
+        var scale = Math.Min(requestedScale, maximumScale);
+        var scaledWidth = Math.Max(1, (int)Math.Round(region.Width * scale));
+        var scaledHeight = Math.Max(1, (int)Math.Round(region.Height * scale));
+
+        using var crop = bitmap.Clone(region, PixelFormat.Format32bppArgb);
+        if (scaledWidth == crop.Width && scaledHeight == crop.Height)
+        {
+            return await ocr.ReadAsync(crop, cancellationToken);
+        }
+
+        using var scaled = new Bitmap(scaledWidth, scaledHeight);
+        using (var graphics = Graphics.FromImage(scaled))
+        {
+            graphics.CompositingMode = CompositingMode.SourceCopy;
+            graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+            graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            graphics.DrawImage(crop, 0, 0, scaled.Width, scaled.Height);
+        }
+
+        return await ocr.ReadAsync(scaled, cancellationToken);
     }
 
     public async Task<TextMatch?> TryFindAnyTextAsync(
