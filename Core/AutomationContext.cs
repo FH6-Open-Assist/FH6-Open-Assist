@@ -6,6 +6,7 @@ namespace FH6OpenAssist.Core;
 public sealed record MacroRunRequest(
     MacroKind Kind,
     int? TargetSkillPoints = null,
+    long? TargetCredits = null,
     TimeSpan? Duration = null,
     bool Nested = false);
 

@@ -563,7 +563,7 @@
                                                 Foreground="{ThemeResource BotCardMutedForegroundBrush}"
                                                 FontSize="12"
                                                 MaxLines="2"
-                                                Text="Compra, melhora e gira carros pela sequência Mad Mike."
+                                                Text="Compra o Mad Mike, libera o Wheelspin da Maestria e prepara o próximo ciclo."
                                                 TextWrapping="Wrap" />
                                         </StackPanel>
                                         <TextBlock
@@ -699,15 +699,15 @@
                                             Spacing="7">
                                             <StackPanel Orientation="Horizontal" Spacing="7">
                                                 <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
-                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Subaru Impreza 22B-STI Version" TextWrapping="Wrap" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Automático · Subaru Impreza 22B-STI Version" TextWrapping="Wrap" />
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" Spacing="7">
-                                                <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
-                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Assistências ativadas" TextWrapping="Wrap" />
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource WarningBrush}" Glyph="&#xE7BA;" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Aviso · Todas as assistências devem estar ativadas" TextWrapping="Wrap" />
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" Spacing="7">
-                                                <FontIcon FontSize="12" Foreground="{ThemeResource SuccessBrush}" Glyph="&#xE73E;" />
-                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Não iniciar dentro da garagem" TextWrapping="Wrap" />
+                                                <FontIcon FontSize="12" Foreground="{ThemeResource TextBrush}" Glyph="&#xE73E;" />
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="Pré-requisito · Jogo aberto e renderizando" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </StackPanel>
                                         <Border Padding="10" Background="{ThemeResource LayerBrush}" CornerRadius="8">

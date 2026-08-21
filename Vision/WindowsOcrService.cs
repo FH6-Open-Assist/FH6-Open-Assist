@@ -13,7 +13,15 @@ public sealed record OcrLine(string Text, double X, double Y, double Width, doub
     public Point Center => new((int)Math.Round(X + Width / 2), (int)Math.Round(Y + Height / 2));
 }
 
-public sealed record OcrDocument(string Text, IReadOnlyList<OcrLine> Lines);
+public sealed record OcrToken(string Text, double X, double Y, double Width, double Height)
+{
+    public Point Center => new((int)Math.Round(X + Width / 2), (int)Math.Round(Y + Height / 2));
+}
+
+public sealed record OcrDocument(
+    string Text,
+    IReadOnlyList<OcrLine> Lines,
+    IReadOnlyList<OcrToken> Tokens);
 
 public sealed record TextMatch(string RequestedText, OcrLine Line, string NormalizedText);
 
@@ -128,6 +136,7 @@ public sealed class WindowsOcrService
         CancellationToken cancellationToken)
     {
         var lines = new List<OcrLine>(result.Lines.Count);
+        var tokens = new List<OcrToken>();
         foreach (var line in result.Lines)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -146,8 +155,14 @@ public sealed class WindowsOcrService
                 top + region.Y,
                 right - left,
                 bottom - top));
+            tokens.AddRange(line.Words.Select(word => new OcrToken(
+                word.Text,
+                word.BoundingRect.X + region.X,
+                word.BoundingRect.Y + region.Y,
+                word.BoundingRect.Width,
+                word.BoundingRect.Height)));
         }
 
-        return new OcrDocument(result.Text, lines);
+        return new OcrDocument(result.Text, lines, tokens);
     }
 }

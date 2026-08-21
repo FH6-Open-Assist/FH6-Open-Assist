@@ -45,6 +45,7 @@ public enum GameKey : ushort
     NumPad9 = 0x69,
     A = 0x41,
     C = 0x43,
+    S = 0x53,
     W = 0x57,
     X = 0x58,
     Y = 0x59
@@ -78,6 +79,7 @@ public static class GameKeyTranslator
         GameKey.D9 => 0x39,
         GameKey.A => 0x41,
         GameKey.C => 0x43,
+        GameKey.S => 0x53,
         GameKey.W => 0x57,
         GameKey.X => 0x58,
         GameKey.Y => 0x59,
@@ -203,8 +205,18 @@ public sealed class GameInputService : IDisposable
 
     public bool ValidateBackgroundInput() => TryEnableBackgroundInput();
 
-    public async Task TapAsync(GameKey key, CancellationToken cancellationToken, int holdMs = 65)
+    public async Task TapAsync(
+        GameKey key,
+        CancellationToken cancellationToken,
+        int holdMs = 65,
+        int? postDelayMs = null)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(holdMs);
+        if (postDelayMs is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(postDelayMs));
+        }
+
         await KeyDownAsync(key, cancellationToken);
         try
         {
@@ -215,7 +227,7 @@ public sealed class GameInputService : IDisposable
             await KeyUpAsync(key, CancellationToken.None);
         }
 
-        await Task.Delay(_settings.ActionDelayMs, cancellationToken);
+        await Task.Delay(postDelayMs ?? _settings.ActionDelayMs, cancellationToken);
     }
 
     public async Task HoldAsync(
@@ -440,6 +452,10 @@ public sealed class GameInputService : IDisposable
                 {
                     controller.SetSliderValue(Xbox360Slider.RightTrigger, byte.MaxValue);
                 }
+                else if (key == GameKey.S)
+                {
+                    controller.SetSliderValue(Xbox360Slider.LeftTrigger, byte.MaxValue);
+                }
                 else if (key == GameKey.A)
                 {
                     controller.SetAxisValue(Xbox360Axis.LeftThumbX, short.MinValue);
@@ -585,7 +601,11 @@ public sealed class GameInputService : IDisposable
             return false;
         }
 
-        return WaitForSingleObject(timer, Infinite) == WaitObject0;
+        var timeoutMilliseconds = (uint)Math.Clamp(
+            Math.Ceiling(milliseconds) + 50,
+            1,
+            HoldHealthCheckIntervalMilliseconds + 50);
+        return WaitForSingleObject(timer, timeoutMilliseconds) == WaitObject0;
     }
 
     private static void WaitWithMonotonicFallback(
@@ -664,6 +684,10 @@ public sealed class GameInputService : IDisposable
                         if (key == GameKey.W)
                         {
                             controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
+                        }
+                        else if (key == GameKey.S)
+                        {
+                            controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
                         }
                         else if (key == GameKey.A)
                         {
@@ -1047,7 +1071,6 @@ public sealed class GameInputService : IDisposable
     private const int HoldHealthCheckIntervalMilliseconds = 100;
     private const uint CreateWaitableTimerHighResolution = 0x00000002;
     private const uint TimerAllAccess = 0x001F0003;
-    private const uint Infinite = 0xFFFFFFFF;
     private const uint WaitObject0 = 0x00000000;
 
     [StructLayout(LayoutKind.Sequential)]

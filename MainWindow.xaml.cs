@@ -104,7 +104,8 @@ public sealed partial class MainWindow : Window
             CrFarmSamples = crFarmSamples,
             Resources = _resources,
             Telemetry = _telemetry,
-            RunNestedAsync = (_, _) => Task.CompletedTask
+            RunNestedAsync = (_, _) => Task.FromException(
+                new AutomationFaultException("O encadeamento de workflows ainda não foi configurado."))
         };
         IMacroWorkflow[] workflows =
         [
@@ -983,7 +984,12 @@ public sealed partial class MainWindow : Window
         {
             content.Children.Add(new TextBlock
             {
-                Text = $"• {requirement}",
+                Text = requirement.Kind switch
+                {
+                    BotRequirementKind.Automated => $"• Automático: {requirement.Text}",
+                    BotRequirementKind.Required => $"• Pré-requisito: {requirement.Text}",
+                    _ => $"• Aviso: {requirement.Text}"
+                },
                 TextWrapping = TextWrapping.Wrap
             });
         }

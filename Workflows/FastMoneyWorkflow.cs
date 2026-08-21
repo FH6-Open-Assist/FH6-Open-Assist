@@ -45,6 +45,11 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
         MacroRunRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.TargetCredits is < 1 or > 999_999_999)
+        {
+            throw new AutomationFaultException($"Meta de CR inválida para o farm integrado: {request.TargetCredits}.");
+        }
+
         if (!context.Input.IsBackgroundInputAvailable && !context.Input.TryEnableBackgroundInput())
         {
             throw new CalibrationRequiredException(
@@ -63,6 +68,14 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
         context.Telemetry.UpdateStage(
             "Preparando rua",
             $"Validando o estado inicial do Farm de CR em {mode}.");
+
+        var carSelector = new RequiredCarSelector(context);
+        await carSelector.EnsureSelectedAsync(RequiredCarDefinition.CrFarm, cancellationToken);
+        context.Logger.State(
+            Workflow,
+            "CarroRequisito",
+            "Nissan S-Cargo S1 800 confirmada antes da primeira tentativa. " +
+            "Dificuldade e assistências permanecem avisos de pré-requisito, sem leitura dinâmica.");
 
         var attemptNumber = 0;
         var consecutiveRecoveries = 0;
@@ -83,6 +96,18 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 throw new CalibrationRequiredException(
                     "O saldo inicial de CR não pôde ser confirmado em duas leituras. " +
                     "Nenhum evento foi aberto; verifique a interface do jogo antes de tentar novamente.");
+            }
+
+            if (request.TargetCredits is { } targetCredits && creditsBefore >= targetCredits)
+            {
+                context.Logger.State(
+                    Workflow,
+                    "MetaAtingida",
+                    $"Saldo confirmado de {creditsBefore:N0} CR atingiu a meta integrada de {targetCredits:N0} CR.");
+                context.Telemetry.UpdateStage(
+                    "Meta de CR atingida",
+                    "Retornando ao WheelSpin para releitura independente dos recursos.");
+                return;
             }
 
             attemptNumber++;
@@ -260,8 +285,25 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
                 else
                 {
                     consecutiveRecoveries = 0;
-                    context.Telemetry.CycleCompleted(
-                        $"Tentativa {attemptNumber} confirmada com ganho real de {delta:N0} CR.");
+                    if (!request.Nested)
+                    {
+                        context.Telemetry.CycleCompleted(
+                            $"Tentativa {attemptNumber} confirmada com ganho real de {delta:N0} CR.");
+                    }
+                }
+
+                if (groundTruth == CrAttemptGroundTruth.Valid &&
+                    request.TargetCredits is { } targetCreditsAfter &&
+                    creditsAfter >= targetCreditsAfter)
+                {
+                    context.Logger.State(
+                        Workflow,
+                        "MetaAtingida",
+                        $"Saldo confirmado de {creditsAfter:N0} CR atingiu a meta integrada de {targetCreditsAfter:N0} CR.");
+                    context.Telemetry.UpdateStage(
+                        "Meta de CR atingida",
+                        "Retornando ao WheelSpin para releitura independente dos recursos.");
+                    return;
                 }
 
                 await Task.Delay(2_000, cancellationToken);

@@ -2,12 +2,21 @@ using System.Collections.ObjectModel;
 
 namespace FH6OpenAssist.Core;
 
+public enum BotRequirementKind
+{
+    Automated,
+    Required,
+    Advisory
+}
+
+public sealed record BotRequirement(string Text, BotRequirementKind Kind);
+
 public sealed record BotDefinition(
     MacroKind Kind,
     string Name,
     string Description,
     string ResourceSummary,
-    IReadOnlyList<string> Requirements,
+    IReadOnlyList<BotRequirement> Requirements,
     string StartContext,
     bool SupportsBackground,
     bool RequiresViGEm,
@@ -23,10 +32,10 @@ public static class BotCatalog
             "Farma pontos de habilidade com corrida e repetição assistida.",
             "SP",
             Requirements(
-                "Subaru Impreza 22B-STI Version selecionado",
-                "Árvore de habilidades desbloqueada é recomendada",
-                "Todas as assistências ativadas",
-                "Jogo aberto e renderizando, sem estar minimizado"),
+                Automated("Subaru Impreza 22B-STI Version: o BOT seleciona se necessário"),
+                Advisory("Árvore de habilidades desbloqueada é recomendada"),
+                Advisory("Todas as assistências devem estar ativadas"),
+                Required("Jogo aberto e renderizando, sem estar minimizado")),
             "Na rua, fora da garagem.",
             SupportsBackground: true,
             RequiresViGEm: false,
@@ -37,11 +46,11 @@ public static class BotCatalog
             "Executa a rota calibrada para ganho recorrente de créditos.",
             "Créditos",
             Requirements(
-                "Nissan S-Cargo S1 800 selecionado",
-                "Carro sem tunagem",
-                "Dificuldade Imbatível",
-                "Todas as assistências desativadas",
-                "ViGEmBus instalado e conectado"),
+                Automated("Nissan S-Cargo exatamente S1 800: o BOT seleciona se necessário"),
+                Advisory("Carro sem tunagem"),
+                Advisory("Dificuldade Imbatível"),
+                Advisory("Todas as assistências devem estar desativadas"),
+                Required("ViGEmBus instalado e conectado")),
             "Na rua, fora da garagem.",
             SupportsBackground: true,
             RequiresViGEm: true,
@@ -49,16 +58,18 @@ public static class BotCatalog
         new BotDefinition(
             MacroKind.FarmarWheelspins,
             "WheelSpin Mad Mike",
-            "Compra, melhora e gira carros pela sequência Mad Mike.",
+            "Compra o Mad Mike, libera o Wheelspin da Maestria e prepara o próximo ciclo.",
             "SP e créditos",
             Requirements(
-                "Conta VIP",
-                "Pelo menos 100.000 CR disponíveis por ciclo",
-                "Pelo menos 30 SP disponíveis por ciclo",
-                "Aceitar que uma cópia compatível do Mad Mike pode ser removida"),
-            "Na garagem, com o menu Campanha aberto.",
+                Required("Conta VIP"),
+                Automated("SP: ao faltar para outro ciclo, o BOT farma até 999 e relê o saldo"),
+                Automated("CR: ao faltar para outro ciclo, o BOT farma até 10.000.000 e relê o saldo"),
+                Automated("Subaru 22B e Nissan S-Cargo S1 800 são selecionados nos reabastecimentos"),
+                Advisory("Assistências permanecem pré-requisitos informados pelos BOTs SP e CR"),
+                Required("Aceitar que uma cópia compatível do Mad Mike será removida ao fim de cada ciclo")),
+            "Na rua, no menu de pausa ou na garagem; o BOT normaliza a entrada.",
             SupportsBackground: true,
-            RequiresViGEm: false,
+            RequiresViGEm: true,
             Experimental: false),
         new BotDefinition(
             MacroKind.GastarWheelspins,
@@ -66,10 +77,10 @@ public static class BotCatalog
             "Gira Super Wheelspins e Wheelspins com confirmação visual.",
             "Wheelspins",
             Requirements(
-                "Interface do jogo em português do Brasil",
-                "Pacote de OCR em português disponível no Windows",
-                "Wheelspins ou Super Wheelspins disponíveis para realizar giros",
-                "Aceitar que carros duplicados serão mantidos"),
+                Required("Interface do jogo em português do Brasil"),
+                Required("Pacote de OCR em português disponível no Windows"),
+                Required("Wheelspins ou Super Wheelspins disponíveis para realizar giros"),
+                Advisory("Aceitar que carros duplicados serão mantidos")),
             "Na rua, no menu de pausa ou em uma tela de Wheelspin.",
             SupportsBackground: true,
             RequiresViGEm: false,
@@ -95,6 +106,15 @@ public static class BotCatalog
     public static bool TryGet(MacroKind kind, out BotDefinition? definition) =>
         DefinitionsByKind.TryGetValue(kind, out definition);
 
-    private static IReadOnlyList<string> Requirements(params string[] requirements) =>
+    private static BotRequirement Automated(string text) =>
+        new(text, BotRequirementKind.Automated);
+
+    private static BotRequirement Required(string text) =>
+        new(text, BotRequirementKind.Required);
+
+    private static BotRequirement Advisory(string text) =>
+        new(text, BotRequirementKind.Advisory);
+
+    private static IReadOnlyList<BotRequirement> Requirements(params BotRequirement[] requirements) =>
         Array.AsReadOnly(requirements);
 }

@@ -12,10 +12,38 @@ O projeto usa a ferramenta mais simples que consiga resolver cada classe de prob
 | Texto, saldos e menus variáveis | `Windows.Media.Ocr` em processo | Idiomas do perfil do Windows; pt-BR deve estar instalado/priorizado; tela inteira ou ROI |
 | Menus e diálogos de layout estável | `ClassicalGameStateDetector` | Geometria e proporções de cor determinísticas |
 | Contexto de jogo | `GameContextDetector` | Combina OCR e visão clássica do mesmo frame; conflito vira `Unknown` |
+| Resultado e HUD do Farm de SP | `SpRaceVision` | OCR de ROIs + cores do mesmo frame, seguido por consenso temporal conservador |
+| Seleção do carro requisito | `RequiredCarSelector` | OCR, tokens posicionais e contornos clássicos; fabricante, cartão e classe precisam permanecer coerentes |
 | Alinhamento variável entre placas | `CrPositionClassifier` | ONNX em CPU, com confirmação temporal conservadora |
 | Auditoria offline de parte das regras clássicas | `tools/vision/analyze_classical_states.py` | OpenCV, cobertura parcial; nunca é carregado pelo executável |
 
 Os templates PNG de `Assets/Vision` são referências herdadas para calibração offline. O runtime C# atual não executa template matching com eles.
+
+## OCR escalado, consenso temporal e seleção de carros
+
+`GameVisionService` pode recortar uma ROI e ampliá-la em memória antes do OCR. A escala solicitada nunca reduz a região abaixo de um pixel e é limitada para que nenhuma dimensão ultrapasse 2.400 pixels. O resize usa vizinho mais próximo, adequado aos textos pequenos da interface. Quando uma decisão também depende da tela inteira, `AnalyzeScreenWithScaledRegionsAsync` deriva o OCR global, os crops ampliados e a visão clássica do mesmo bitmap; não se deve combinar evidências capturadas em momentos diferentes para autorizar uma ação.
+
+Além das linhas, `WindowsOcrService` expõe tokens com texto e geometria. Isso permite associar palavras a células conhecidas da interface sem clicar diretamente na posição fornecida pelo OCR. A geometria continua sendo evidência, não uma autorização isolada: regiões fora do frame são rejeitadas ou limitadas, e texto ausente ou conflitante permanece inconclusivo.
+
+`SpRaceVision` separa três estados: `Success`, `Failure` e `Unknown`. O checkpoint combina:
+
+- OCR ampliado do título e das ações do rodapé;
+- presença de Continuar, Tentar Novamente e Sair;
+- proporções verde/vermelha dos controles nas posições esperadas;
+- vetos para título, ação ou layout incompatível com o resultado proposto.
+
+O Farm de SP mantém uma janela móvel das três observações mais recentes. Sucesso ou falha exige pelo menos duas confirmações e nenhuma confirmação do estado oposto; `Unknown` não contabiliza SP. Em transições que autorizam novo input mantido, como reconhecer o HUD Tempo Restante/Atual antes de acelerar, o consenso 2/3 também exige que a observação mais recente seja positiva. Essa regra de **latest-positive** impede que dois frames antigos autorizem uma ação depois que a tela já mudou. Timeout ou conflito salva somente um diagnóstico local e interrompe o fluxo.
+
+Antes dos farms correspondentes, `RequiredCarSelector` confirma o Subaru Impreza 22B-STI do Farm de SP ou a Nissan S-Cargo S1 800 do Farm de CR. A seleção ocorre em camadas:
+
+1. confirma o menu da rua e lê o cabeçalho atual em três capturas;
+2. reconhece a grade de fabricantes por título, distribuição das células e contorno lime do foco;
+3. associa tokens OCR às células fixas da grade de carros e exige um único foco clássico coerente com o cartão;
+4. para a S-Cargo, lê o PI no painel de detalhes e exige S1 800 em duas de três leituras sem classe conflitante;
+5. antes de entrar no carro, readquire fabricante, cartão, célula, foco e, quando aplicável, classe;
+6. após a entrega, aguarda passivamente a rua/menu e relê o cabeçalho do carro antes de permitir o farm.
+
+Movimentos, sondas e correções são limitados. Perda da grade, fabricante diferente, múltiplos candidatos, foco ambíguo, PI ausente/conflitante ou falha na releitura final produz `CalibrationRequiredException`; o BOT não presume que a troca funcionou nem inicia o farm com um carro não confirmado.
 
 ## Contrato de segurança do Farm de CR
 
@@ -74,6 +102,8 @@ Frames e diagnósticos podem mostrar saldo, gamertag, notificações ou outros e
 - ao compartilhar um diagnóstico indispensável, recorte ou anonimize os dados pessoais;
 - publique somente código, o ONNX exportado e seus metadados reproduzíveis;
 - mantenha nomes de grupos sem informações pessoais.
+
+Recortar ou ampliar uma ROI não anonimiza seu conteúdo. Texto OCR incluído em logs e PNGs de diagnóstico continua sendo dado local potencialmente sensível; use-o apenas para depuração, aplique a mesma retenção restrita das capturas e nunca o copie para documentação pública sem revisão.
 
 ## Preparar o ambiente Python
 
@@ -174,6 +204,9 @@ As duas imagens de menu são pré-requisitos locais e não acompanham o reposit�
 
 - A responsabilidade continua correta: clássico para estável, ONNX para variável?
 - OCR e clássico analisam o mesmo frame?
+- ROIs ampliadas respeitam o limite de dimensão e continuam vinculadas ao checkpoint que autorizou a decisão?
+- O consenso temporal exige ausência de conflito e, nas transições de ação, a observação mais recente positiva?
+- Fabricante, cartão, foco, classe e confirmação pós-entrega falham fechados quando qualquer evidência fica inconclusiva?
 - Conflitos e estados desconhecidos falham fechados?
 - Captura, OCR e inferência ocorrem apenas nos checkpoints necessários?
 - Cancelamento libera inputs e encerra a captura pendente?

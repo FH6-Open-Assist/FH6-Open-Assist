@@ -40,6 +40,8 @@ O projeto é WinUI 3 não empacotado, self-contained, .NET 10 e x64. `MainWindow
 - No primeiro plano, valide processo, HWND e foco antes de enviar entrada.
 - No segundo plano, não foregrounde o jogo e falhe se ViGEm não estiver funcional.
 - Use timeouts e tentativas limitadas. Um estado desconhecido não autoriza input destrutivo.
+- Somente uma execução raiz do WheelSpin pode encadear os farms de SP ou CR, com profundidade única, alvo validado e o mesmo token de cancelamento. O retorno precisa liberar entradas e captura antes de devolver o controle ao fluxo pai.
+- Trate o SP publicado após uma corrida como estimativa de telemetria. Compra, conclusão do reabastecimento e retomada do WheelSpin exigem a releitura exata da tela de Maestria; checkpoints locais incompatíveis ou não graváveis devem bloquear a próxima ação destrutiva.
 - Mudanças temporais devem informar a tela inicial, FPS, modo, duração medida e motivo da calibração.
 - Farm de CR depende de ViGEm também no primeiro plano.
 
@@ -49,6 +51,7 @@ O projeto é WinUI 3 não empacotado, self-contained, .NET 10 e x64. `MainWindow
 - Use visão clássica C# para layouts simples e estáveis. OpenCV é apenas a ferramenta de auditoria offline.
 - Reserve ONNX para variação visual que realmente precise de treino. Hoje ele decide o alinhamento entre as placas do Farm de CR.
 - Se OCR e clássico discordarem, preserve o resultado `Unknown`.
+- Decisões multiframe que autorizam uma nova entrada devem exigir o consenso previsto e uma observação positiva no frame mais recente; dois frames antigos não autorizam uma ação depois que a tela mudou.
 - Não troque o consenso temporal do ONNX por aceitação de um único frame.
 - Não reduza o piso de 90% sem dataset independente e validação econômica.
 
@@ -119,6 +122,7 @@ Não há suíte automatizada. Faça a menor validação suficiente e informe o q
 | Input/cancelamento | F8/F9, perda de foco/janela e soltura de todas as entradas |
 | Segundo plano | Forza coberto, não minimizado e sem ganhar foco |
 | Workflow do jogo | Tela inicial, modo, resolução/FPS, logs e resultado real |
+| WheelSpin integrado | Handoff SP/CR, retorno à garagem, releitura exata da meta e pelo menos um ciclo posterior no mesmo binário |
 | Farm de CR/ONNX | Consenso sob freio, tempo de soltura→freio e delta de CR; `EventMenu` persistente para `Invalid` operacional |
 | Empacotamento | ZIP + Setup a partir do mesmo staging |
 
