@@ -42,9 +42,18 @@ jobs:
             ".\artifacts\release\FH6-Open-Assist-Setup.exe"
           )
 
-          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseJson = gh release list --limit 1000 --json tagName,isDraft --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível consultar as GitHub Releases existentes."
+          }
+
+          $releases = ConvertFrom-Json -InputObject $releaseJson
+          $existingRelease = @($releases) | Where-Object { $_.tagName -eq $env:GITHUB_REF_NAME } | Select-Object -First 1
+          if ($null -ne $existingRelease) {
             gh release upload $env:GITHUB_REF_NAME @assets --clobber --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -eq 0 -and $existingRelease.isDraft) {
+              gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY
+            }
           }
           else {
             gh release create $env:GITHUB_REF_NAME @assets --verify-tag --generate-notes --title $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY
