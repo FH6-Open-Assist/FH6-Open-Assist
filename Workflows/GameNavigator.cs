@@ -13,6 +13,8 @@ public sealed class GameNavigator(AutomationContext context)
     private const string Workflow = "Navegação";
     private const int MasterySkillPointsOcrScale = 3;
     private const int MaximumPauseTabMoves = 6;
+    private const int PauseTabPulseMilliseconds = 12;
+    private const int PauseTabSettleMilliseconds = 900;
     private const int EventExitSettleMilliseconds = 12_000;
     private const double ActiveTabDarkRatio = 0.42;
     private const double ActiveTabLimeRatio = 0.04;
@@ -192,7 +194,7 @@ public sealed class GameNavigator(AutomationContext context)
                 if (consecutiveMisses >= 2)
                 {
                     await Task.Delay(320, cancellationToken);
-                    if (await ConfirmPauseTabStateAsync(cancellationToken) == PauseTabState.MeuHorizon)
+                    if ((await ConfirmPauseTabAsync(cancellationToken)).State == PauseTabState.MeuHorizon)
                     {
                         context.Logger.State(
                             Workflow,
@@ -2813,8 +2815,8 @@ public sealed class GameNavigator(AutomationContext context)
     {
         for (var moves = 0; moves <= MaximumPauseTabMoves; moves++)
         {
-            var state = await ConfirmPauseTabStateAsync(cancellationToken);
-            if (state == PauseTabState.MeuHorizon)
+            var confirmation = await ConfirmPauseTabAsync(cancellationToken);
+            if (confirmation.State == PauseTabState.MeuHorizon)
             {
                 if (moves == 0)
                 {
@@ -2824,17 +2826,19 @@ public sealed class GameNavigator(AutomationContext context)
                 context.Logger.State(
                     Workflow,
                     "AbrirMeuHorizon",
-                    $"Aba Meu Horizon confirmada pelo cabeçalho em 2/3 após {moves} movimento(s) LB.");
+                    moves == 0
+                        ? "Aba Meu Horizon já estava ativa e teve o foco normalizado pela reentrada confirmada RB→LB."
+                        : $"Aba Meu Horizon confirmada pelo cabeçalho em 2/3 após {moves} movimento(s) direcionado(s).");
                 return;
             }
 
-            if (state == PauseTabState.Unknown)
+            if (confirmation.State == PauseTabState.Unknown || confirmation.ActiveTab is null)
             {
                 using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
                 var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, Workflow, "IdentificarAbaPausa");
                 throw new CalibrationRequiredException(
                     "O cabeçalho do menu de pausa não produziu uma aba ativa inequívoca em 2/3 capturas; " +
-                    $"nenhum LB adicional foi autorizado. Diagnóstico: {diagnostic}");
+                    $"nenhum movimento adicional foi autorizado. Diagnóstico: {diagnostic}");
             }
 
             if (moves == MaximumPauseTabMoves)
@@ -2842,18 +2846,36 @@ public sealed class GameNavigator(AutomationContext context)
                 break;
             }
 
+            var activeIndex = Array.FindIndex(
+                PauseTabs,
+                tab => string.Equals(tab.Name, confirmation.ActiveTab, StringComparison.Ordinal));
+            var targetIndex = Array.FindIndex(
+                PauseTabs,
+                tab => string.Equals(tab.Name, "MEU HORIZON", StringComparison.Ordinal));
+            if (activeIndex < 0 || targetIndex < 0 || activeIndex == targetIndex)
+            {
+                using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
+                var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, Workflow, "DirecionarAbaPausa");
+                throw new CalibrationRequiredException(
+                    $"A aba ativa '{confirmation.ActiveTab}' não produziu uma direção segura até Meu Horizon; " +
+                    $"nenhum movimento adicional foi autorizado. Diagnóstico: {diagnostic}");
+            }
+
+            var moveKey = activeIndex < targetIndex ? GameKey.PageDown : GameKey.PageUp;
+            var moveLabel = moveKey == GameKey.PageDown ? "RB/PgDn" : "LB/PgUp";
             context.Logger.State(
                 Workflow,
                 "AbrirMeuHorizon",
-                $"Outra aba está ativa; avançando um LB ({moves + 1}/{MaximumPauseTabMoves}).");
-            await context.Input.TapAsync(GameKey.PageUp, cancellationToken, 60, postDelayMs: 140);
-            await Task.Delay(320, cancellationToken);
+                $"Aba {confirmation.ActiveTab} ativa; avançando com um pulso preciso {moveLabel} " +
+                $"({moves + 1}/{MaximumPauseTabMoves}) e aguardando a transição estabilizar.");
+            await context.Input.HoldPreciselyAsync(moveKey, PauseTabPulseMilliseconds, cancellationToken);
+            await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
         }
 
         using var finalFrame = await context.Capture.CaptureAsync(CancellationToken.None);
         var finalDiagnostic = context.Capture.SaveDiagnostic(finalFrame.Bitmap, Workflow, "AbrirMeuHorizonLimitado");
         throw new CalibrationRequiredException(
-            $"A aba Meu Horizon não foi confirmada após {MaximumPauseTabMoves} movimentos LB limitados. " +
+            $"A aba Meu Horizon não foi confirmada após {MaximumPauseTabMoves} movimentos direcionais limitados. " +
             $"Diagnóstico: {finalDiagnostic}");
     }
 
@@ -2862,10 +2884,13 @@ public sealed class GameNavigator(AutomationContext context)
         context.Logger.State(
             Workflow,
             "NormalizarFocoMeuHorizon",
-            "Meu Horizon já estava ativo; fazendo uma única reentrada confirmada RB→LB para não reutilizar o foco de outro cartão.");
-        await context.Input.TapAsync(GameKey.PageDown, cancellationToken, 60, postDelayMs: 140);
-        await Task.Delay(320, cancellationToken);
-        if (await ConfirmPauseTabStateAsync(cancellationToken) != PauseTabState.Other)
+            "Meu Horizon já estava ativo; fazendo uma única reentrada confirmada RB→LB com pulsos precisos " +
+            "para não reutilizar o foco de outro cartão.");
+        await context.Input.HoldPreciselyAsync(GameKey.PageDown, PauseTabPulseMilliseconds, cancellationToken);
+        await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
+        var otherTab = await ConfirmPauseTabAsync(cancellationToken);
+        if (otherTab.State != PauseTabState.Other ||
+            !string.Equals(otherTab.ActiveTab, "ONLINE", StringComparison.Ordinal))
         {
             using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
             var diagnostic = context.Capture.SaveDiagnostic(
@@ -2873,13 +2898,14 @@ public sealed class GameNavigator(AutomationContext context)
                 Workflow,
                 "SairMeuHorizonParaNormalizarFoco");
             throw new CalibrationRequiredException(
-                "A aba Meu Horizon já estava ativa, mas um único RB não confirmou outra aba em 2/3; " +
+                "A aba Meu Horizon já estava ativa, mas um único RB não confirmou a aba Online em 2/3 " +
+                $"(observada: {otherTab.ActiveTab ?? "indefinida"}); " +
                 $"nenhum A foi enviado. Diagnóstico: {diagnostic}");
         }
 
-        await context.Input.TapAsync(GameKey.PageUp, cancellationToken, 60, postDelayMs: 140);
-        await Task.Delay(320, cancellationToken);
-        if (await ConfirmPauseTabStateAsync(cancellationToken) != PauseTabState.MeuHorizon)
+        await context.Input.HoldPreciselyAsync(GameKey.PageUp, PauseTabPulseMilliseconds, cancellationToken);
+        await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
+        if ((await ConfirmPauseTabAsync(cancellationToken)).State != PauseTabState.MeuHorizon)
         {
             using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
             var diagnostic = context.Capture.SaveDiagnostic(
@@ -2897,20 +2923,16 @@ public sealed class GameNavigator(AutomationContext context)
             "A reentrada RB→LB foi confirmada; o cartão de viagem ainda será validado por texto e contorno antes de A.");
     }
 
-    private async Task<PauseTabState> ConfirmPauseTabStateAsync(CancellationToken cancellationToken)
+    private async Task<PauseTabConfirmation> ConfirmPauseTabAsync(CancellationToken cancellationToken)
     {
-        var meuHorizon = 0;
-        var other = 0;
+        var activeTabs = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var attempt = 0; attempt < 3; attempt++)
         {
             var observation = await context.Vision.AnalyzeScreenAsync(AnalyzePauseTab, cancellationToken);
-            if (observation.State == PauseTabState.MeuHorizon)
+            if (observation.ActiveTab is not null)
             {
-                meuHorizon++;
-            }
-            else if (observation.State == PauseTabState.Other)
-            {
-                other++;
+                activeTabs.TryGetValue(observation.ActiveTab, out var count);
+                activeTabs[observation.ActiveTab] = count + 1;
             }
 
             if (attempt < 2)
@@ -2922,15 +2944,18 @@ public sealed class GameNavigator(AutomationContext context)
         context.Logger.State(
             Workflow,
             "IdentificarAbaPausa",
-            $"Cabeçalho: Meu Horizon={meuHorizon}/3, outra aba={other}/3.");
-        if (meuHorizon >= 2 && other == 0)
+            $"Cabeçalho: abas ativas=[{string.Join(", ", activeTabs.Select(pair => $"{pair.Key}={pair.Value}/3"))}].");
+        if (activeTabs.Count == 1 && activeTabs.Values.Single() >= 2)
         {
-            return PauseTabState.MeuHorizon;
+            var activeTab = activeTabs.Keys.Single();
+            return new PauseTabConfirmation(
+                string.Equals(activeTab, "MEU HORIZON", StringComparison.Ordinal)
+                    ? PauseTabState.MeuHorizon
+                    : PauseTabState.Other,
+                activeTab);
         }
 
-        return other >= 2 && meuHorizon == 0
-            ? PauseTabState.Other
-            : PauseTabState.Unknown;
+        return new PauseTabConfirmation(PauseTabState.Unknown, null);
     }
 
     private static PauseTabObservation AnalyzePauseTab(Bitmap bitmap, OcrDocument _)
@@ -3505,6 +3530,8 @@ public sealed class GameNavigator(AutomationContext context)
         string? ActiveTab,
         double DarkRatio,
         double UnderlineLimeRatio);
+
+    private sealed record PauseTabConfirmation(PauseTabState State, string? ActiveTab);
 
     private sealed record TravelCardObservation(
         bool TextVisible,
