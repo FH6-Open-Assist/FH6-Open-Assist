@@ -4,6 +4,8 @@
 ![Windows 10 e 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)
 ![WinUI 3](https://img.shields.io/badge/interface-WinUI%203-0078D4.svg)
+[![VirusTotal · Portable](https://img.shields.io/endpoint?url=https%3A%2F%2Fgithub.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Freleases%2Flatest%2Fdownload%2Fvirustotal-portable.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
+[![VirusTotal · Setup](https://img.shields.io/endpoint?url=https%3A%2F%2Fgithub.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Freleases%2Flatest%2Fdownload%2Fvirustotal-setup.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
 
 Assistente de automação de código aberto para **Forza Horizon 6**, feito em WinUI 3 para reduzir tarefas repetitivas no Windows com verificações visuais e paradas seguras.
 
@@ -35,6 +37,8 @@ A interface reúne preparação do BOT, compatibilidade do modo, estado atual, m
 4. Abra o Forza Horizon 6, prepare a tela indicada para o BOT e inicie o FH6 Open Assist.
 
 O pacote é autossuficiente e não exige a instalação separada do .NET. No portátil, não remova `portable.marker`: ele mantém preferências, logs, diagnósticos e amostras junto do aplicativo.
+
+Os selos do VirusTotal mostram o resultado obtido para o instalador e o pacote portátil da release mais recente gerada pela pipeline atual. Clique em um selo para abrir a release e acessar os relatórios por SHA-256. Zero alertas não garante ausência de ameaças, e resultados isolados podem ser falsos positivos.
 
 > [!NOTE]
 > Releases antigas podem exibir apenas `FH6-Open-Assist-win-x64.zip`. Esse é um pacote legado e não representa o pipeline atual de instalador + portátil.

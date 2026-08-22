@@ -23,10 +23,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Baixar código
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configurar .NET 10
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
@@ -35,3 +35,34 @@ jobs:
 
       - name: Compilar e validar os pacotes de Release
         run: .\scripts\build-release.ps1 -Version 0.0.0-ci -NoRestore -OutputDirectory .\artifacts\release
+
+      - name: Validar metadados do VirusTotal sem upload
+        shell: powershell
+        run: |
+          $outputDirectory = ".\artifacts\virustotal-ci"
+          .\scripts\scan-release-virustotal.ps1 `
+            -PortablePath ".\artifacts\release\FH6-Open-Assist-Portable.zip" `
+            -SetupPath ".\artifacts\release\FH6-Open-Assist-Setup.exe" `
+            -OutputDirectory $outputDirectory `
+            -FixturePath ".\scripts\fixtures\virustotal-clean.json"
+
+          $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+          foreach ($artifact in @("portable", "setup")) {
+            $badgePath = Join-Path $outputDirectory "virustotal-$artifact.json"
+            $badge = [System.IO.File]::ReadAllText($badgePath, $utf8) | ConvertFrom-Json
+            if ($badge.schemaVersion -ne 1 -or
+                $badge.message -ne "0/70 alertas" -or
+                $badge.color -ne "brightgreen" -or
+                $badge.namedLogo -ne "virustotal") {
+              throw "Badge sintético do VirusTotal inválido: $badgePath"
+            }
+          }
+
+          $notesPath = Join-Path $outputDirectory "virustotal-release-notes.md"
+          $notes = [System.IO.File]::ReadAllText($notesPath, $utf8)
+          $expectedHeading = "Verifica$([char]0x00E7)$([char]0x00E3)o no VirusTotal"
+          if (-not $notes.Contains($expectedHeading) -or
+              -not $notes.Contains("<!-- virustotal:start -->") -or
+              -not $notes.Contains("<!-- virustotal:end -->")) {
+            throw "Notas sinteticas do VirusTotal invalidas."
+          }

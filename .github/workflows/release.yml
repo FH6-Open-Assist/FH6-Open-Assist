@@ -16,21 +16,40 @@ jobs:
   release:
     name: publicar release
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Baixar código
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configurar .NET 10
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
+
+      - name: Validar configuração do VirusTotal
+        shell: powershell
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VT_API_KEY)) {
+            throw "Configure o secret VT_API_KEY antes de publicar uma release."
+          }
 
       - name: Gerar artefatos
         shell: powershell
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: .\scripts\build-release.ps1 -Version $env:RELEASE_TAG -OutputDirectory .\artifacts\release
+
+      - name: Analisar artefatos no VirusTotal
+        shell: powershell
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          .\scripts\scan-release-virustotal.ps1 `
+            -PortablePath ".\artifacts\release\FH6-Open-Assist-Portable.zip" `
+            -SetupPath ".\artifacts\release\FH6-Open-Assist-Setup.exe" `
+            -OutputDirectory ".\artifacts\release"
 
       - name: Criar ou atualizar GitHub Release
         shell: powershell
@@ -39,8 +58,15 @@ jobs:
         run: |
           $assets = @(
             ".\artifacts\release\FH6-Open-Assist-Portable.zip",
-            ".\artifacts\release\FH6-Open-Assist-Setup.exe"
+            ".\artifacts\release\FH6-Open-Assist-Setup.exe",
+            ".\artifacts\release\virustotal-portable.json",
+            ".\artifacts\release\virustotal-setup.json",
+            ".\artifacts\release\virustotal-results.json"
           )
+
+          $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+          $virusTotalNotesPath = ".\artifacts\release\virustotal-release-notes.md"
+          $virusTotalNotes = [System.IO.File]::ReadAllText($virusTotalNotesPath, $utf8)
 
           $releaseJson = gh release list --limit 1000 --json tagName,isDraft --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) {
@@ -51,12 +77,53 @@ jobs:
           $existingRelease = @($releases) | Where-Object { $_.tagName -eq $env:GITHUB_REF_NAME } | Select-Object -First 1
           if ($null -ne $existingRelease) {
             gh release upload $env:GITHUB_REF_NAME @assets --clobber --repo $env:GITHUB_REPOSITORY
-            if ($LASTEXITCODE -eq 0 -and $existingRelease.isDraft) {
+            if ($LASTEXITCODE -ne 0) {
+              throw "Não foi possível atualizar os artefatos da GitHub Release."
+            }
+
+            $existingReleaseJson = gh release view $env:GITHUB_REF_NAME --json body --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) {
+              throw "Não foi possível consultar as notas da GitHub Release."
+            }
+
+            $existingReleaseDetails = ConvertFrom-Json -InputObject $existingReleaseJson
+            $existingBody = [string]$existingReleaseDetails.body
+            $startMarker = "<!-- virustotal:start -->"
+            $endMarker = "<!-- virustotal:end -->"
+            $startIndex = $existingBody.IndexOf($startMarker, [StringComparison]::Ordinal)
+            $endIndex = $existingBody.IndexOf($endMarker, [StringComparison]::Ordinal)
+            if ($startIndex -ge 0 -and $endIndex -ge $startIndex) {
+              $suffixIndex = $endIndex + $endMarker.Length
+              $prefix = $existingBody.Substring(0, $startIndex).TrimEnd()
+              $suffix = $existingBody.Substring($suffixIndex).TrimStart()
+              $updatedBody = (@($prefix, $virusTotalNotes, $suffix) |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join
+                ([Environment]::NewLine + [Environment]::NewLine)
+            }
+            else {
+              $updatedBody = (@($virusTotalNotes, $existingBody) |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join
+                ([Environment]::NewLine + [Environment]::NewLine)
+            }
+
+            $updatedNotesPath = ".\artifacts\release\github-release-notes.md"
+            [System.IO.File]::WriteAllText($updatedNotesPath, $updatedBody, $utf8)
+            gh release edit $env:GITHUB_REF_NAME --notes-file $updatedNotesPath --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) {
+              throw "Não foi possível atualizar as notas da GitHub Release."
+            }
+
+            if ($existingRelease.isDraft) {
               gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY
             }
           }
           else {
-            gh release create $env:GITHUB_REF_NAME @assets --verify-tag --generate-notes --title $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY
+            gh release create $env:GITHUB_REF_NAME @assets `
+              --verify-tag `
+              --generate-notes `
+              --notes $virusTotalNotes `
+              --title $env:GITHUB_REF_NAME `
+              --repo $env:GITHUB_REPOSITORY
           }
 
           if ($LASTEXITCODE -ne 0) {
