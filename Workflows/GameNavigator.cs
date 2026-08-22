@@ -798,7 +798,10 @@ public sealed class GameNavigator(AutomationContext context)
             context.Logger.State(
                 Workflow,
                 "FocarConfiguracoes",
-                "Foco da aba Campanha normalizado; descendo ao cartão central e avançando até Configurações.");
+                "Normalizando o foco na extremidade esquerda da aba Campanha e seguindo uma rota limitada até Configurações.");
+            await context.Input.TapAsync(GameKey.Up, cancellationToken);
+            await TapNavigationRepeatedAsync(GameKey.Left, 3, cancellationToken);
+            await context.Input.TapAsync(GameKey.Right, cancellationToken);
             await context.Input.TapAsync(GameKey.Down, cancellationToken);
             await context.Input.TapAsync(GameKey.Right, cancellationToken);
             settingsFocused = await HasStableLimeHorizontalOutlineAsync(
@@ -809,22 +812,9 @@ public sealed class GameNavigator(AutomationContext context)
 
         if (!settingsFocused)
         {
-            context.Logger.State(
-                Workflow,
-                "CorrigirFocoConfiguracoes",
-                "Configurações ainda não ficou focado; tentando uma única correção vertical para cima.");
-            await context.Input.TapAsync(GameKey.Up, cancellationToken);
-            settingsFocused = await HasStableLimeHorizontalOutlineAsync(
-                settingsRegion,
-                minimumRatio: 0.65,
-                cancellationToken);
-        }
-
-        if (!settingsFocused)
-        {
             throw await CreateDifficultyFailureAsync(
                 "FocarConfiguracoes",
-                "A borda verde do cartão Configurações não foi confirmada em duas de três capturas. " +
+                "A rota normalizada não confirmou a borda verde do cartão Configurações em duas de três capturas. " +
                 "Nenhum Enter foi enviado.");
         }
 
