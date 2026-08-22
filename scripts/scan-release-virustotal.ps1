@@ -246,14 +246,28 @@ function Send-VirusTotalFile {
     $client.Timeout = [TimeSpan]::FromMinutes(12)
     $client.DefaultRequestHeaders.Add("Accept", "application/json")
     $client.DefaultRequestHeaders.Add("x-apikey", $ApiKey)
-    $form = New-Object System.Net.Http.MultipartFormDataContent
+    # O endpoint de upload para arquivos grandes rejeita o multipart gerado pelo
+    # .NET Framework quando o boundary vem entre aspas e o nome inclui filename*.
+    # Escreva os cabeçalhos simples esperados pela API do VirusTotal.
+    $boundary = "--------------------------$([Guid]::NewGuid().ToString('N'))"
+    $form = New-Object System.Net.Http.MultipartFormDataContent -ArgumentList $boundary
+    $form.Headers.ContentType.Parameters.Clear()
+    $form.Headers.ContentType.Parameters.Add(
+        (New-Object System.Net.Http.Headers.NameValueHeaderValue `
+            -ArgumentList "boundary", $boundary))
 
     try {
         $stream = [System.IO.File]::OpenRead($File.FullName)
         $fileContent = New-Object System.Net.Http.StreamContent($stream)
         $fileContent.Headers.ContentType = `
             [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
-        $form.Add($fileContent, "file", $File.Name)
+        $contentDisposition = New-Object `
+            System.Net.Http.Headers.ContentDispositionHeaderValue `
+            -ArgumentList "form-data"
+        $contentDisposition.Name = '"file"'
+        $contentDisposition.FileName = '"' + $File.Name + '"'
+        $fileContent.Headers.ContentDisposition = $contentDisposition
+        $form.Add($fileContent)
 
         $response = $client.PostAsync($uploadUri, $form).GetAwaiter().GetResult()
         $responseBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
