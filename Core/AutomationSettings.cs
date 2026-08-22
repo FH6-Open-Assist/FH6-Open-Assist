@@ -20,6 +20,11 @@ public sealed class AutomationSettings
     public string DiagnosticsDirectory { get; set; } = "diagnostics";
     public SpSettings Sp { get; set; } = new();
     public SpinSettings Spins { get; set; } = new();
+    public SpinSettings RevueltoSpins { get; set; } = new()
+    {
+        SkillPointsPerCar = 39,
+        CreditsPerCar = 365_000
+    };
     public CrFarmSettings CrFarm { get; set; } = new();
 
     [JsonIgnore]
@@ -95,7 +100,7 @@ public sealed class SpSettings
 
 public sealed class SpinSettings
 {
-    public int SkillPointsPerCar { get; set; } = 30;
+    public int SkillPointsPerCar { get; set; } = 21;
     public int CreditsPerCar { get; set; } = 100_000;
     public int PreserveCredits { get; set; } = 0;
 }

@@ -55,6 +55,11 @@ public sealed partial class MainWindow
             WheelspinCardDescriptionText,
             WheelspinCardResourceText);
         ApplyBotDefinitionToCard(
+            BotCatalog.Get(MacroKind.FarmarWheelspinsRevuelto),
+            RevueltoSpinCardTitleText,
+            RevueltoSpinCardDescriptionText,
+            RevueltoSpinCardResourceText);
+        ApplyBotDefinitionToCard(
             BotCatalog.Get(MacroKind.GastarWheelspins),
             SpendWheelspinCardTitleText,
             SpendWheelspinCardDescriptionText,
@@ -66,6 +71,7 @@ public sealed partial class MainWindow
         SpMacro.IsEnabled = available;
         CrMacro.IsEnabled = available;
         WheelspinMacro.IsEnabled = available;
+        RevueltoSpinMacro.IsEnabled = available;
         SpendWheelspinMacro.IsEnabled = available;
     }
 

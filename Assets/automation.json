@@ -14,8 +14,13 @@
     "WRefreshMs": 600
   },
   "Spins": {
-    "SkillPointsPerCar": 30,
+    "SkillPointsPerCar": 21,
     "CreditsPerCar": 100000,
+    "PreserveCredits": 0
+  },
+  "RevueltoSpins": {
+    "SkillPointsPerCar": 39,
+    "CreditsPerCar": 365000,
     "PreserveCredits": 0
   },
   "CrFarm": {

@@ -11,43 +11,31 @@ namespace FH6OpenAssist.Workflows;
 
 public sealed class SpinFarmWorkflow : IMacroWorkflow
 {
-    private const string Workflow = "FarmarWheelspins";
     private const int MaximumCardSearchMoves = 48;
     private const int FastNavigationPostDelayMs = 110;
     private const int MasteryAnimationDelayMs = 2_100;
-    private const int RecoveryCheckpointVersion = 2;
+    private const int RecoveryCheckpointVersion = 3;
     private const string RecoveryCheckpointFileName = "wheelspin-final-confirmed.json";
-    private const int SpRefillIntentVersion = 1;
+    private const int SpRefillIntentVersion = 2;
+    private const int LegacyMadMikeSpRefillIntentVersion = 1;
     private const int SpRefillTarget = 999;
     private const int MaximumSpRefillAttempts = 6;
     private const string SpRefillIntentFileName = "wheelspin-sp-refill-intent.json";
-    private const string RecoveryVehicleKey = "1974-MAZDA-123-MAD-MIKE-808-WAGON-FURSTY";
     private const double FinalPerkLockedMagentaRatio = 0.04;
     private const double FinalPerkPurchasedMagentaRatio = 0.12;
     private static readonly RectangleF CurrentCarHeaderRegion = new(0.03f, 0.01f, 0.50f, 0.18f);
-    private static readonly RectangleF FinalPerkRegion = new(0.14f, 0.14f, 0.34f, 0.56f);
-    private static readonly RectangleF FinalPerkIconRegion = new(0.285f, 0.175f, 0.055f, 0.095f);
     private static readonly RectangleF RemovalNoOptionRegion = new(0.3225f, 0.5117f, 0.3540f, 0.0577f);
     private static readonly RectangleF RemovalYesOptionRegion = new(0.3225f, 0.5694f, 0.3540f, 0.0577f);
-    private static readonly string[] PostMazdaManufacturerTokens =
-    [
-        "MCLAREN",
-        "MERCEDES AMG",
-        "MERCEDES BENZ",
-        "MEYERS",
-        "MG",
-        "MINI",
-        "MITSUBISHI",
-        "MORGAN",
-        "MORRIS",
-        "MOSLER",
-        "NAPIER",
-        "NISSAN"
-    ];
     private static readonly RectangleF[] VisibleCarCells = CreateVisibleCarCells();
     private static readonly JsonSerializerOptions RecoveryCheckpointJsonOptions = CreateRecoveryCheckpointJsonOptions();
+    private readonly SpinFarmProfile _profile;
 
-    public MacroKind Kind => MacroKind.FarmarWheelspins;
+    internal SpinFarmWorkflow(SpinFarmProfile profile)
+    {
+        _profile = profile;
+    }
+
+    public MacroKind Kind => _profile.Kind;
 
     public async Task RunAsync(
         AutomationContext context,
@@ -55,18 +43,18 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         CancellationToken cancellationToken)
     {
         var navigator = new GameNavigator(context);
-        var settings = context.Settings.Spins;
+        var settings = _profile.GetSettings(context.Settings);
         if (settings.SkillPointsPerCar is < 1 or > 999 ||
             settings.CreditsPerCar < 1 ||
             settings.PreserveCredits < 0)
         {
             throw new AutomationFaultException(
-                "Configuração WheelSpin inválida: SkillPointsPerCar deve estar entre 1 e 999, " +
+                $"Configuração de {_profile.VehicleName} inválida: SkillPointsPerCar deve estar entre 1 e 999, " +
                 "CreditsPerCar deve ser positivo e PreserveCredits não pode ser negativo.");
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "Recursos",
             "Normalizando a tela atual até a garagem e lendo SP e créditos disponíveis.");
         context.Telemetry.UpdateStage(
@@ -114,9 +102,9 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     if (purchaseState == PurchaseRecoveryState.NotCommitted)
                     {
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "DescartarCompraAutorizada",
-                            "A autorização persistida não debitou créditos e o carro atual não é o Mad Mike; " +
+                            "A autorização persistida não debitou créditos e o carro atual não é o veículo-alvo; " +
                             "nenhuma compra foi adotada e um novo ciclo poderá começar.");
                         ClearRecoveryCheckpoint(context);
                         break;
@@ -125,11 +113,11 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     if (purchaseState == PurchaseRecoveryState.FinalPerkCandidate)
                     {
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "VerificarCicloInterrompidoAposPerk",
                             "A compra e o débito total de SP batem com o recibo, mas outro carro já está ativo; " +
-                            "o BOT verificará diretamente o perk do Mad Mike antes de removê-lo.");
-                        await RecoverFinalizedMadMikeFromInventoryAsync(
+                            "o BOT verificará diretamente o perk do veículo-alvo antes de removê-lo.");
+                        await RecoverFinalizedVehicleFromInventoryAsync(
                             context,
                             navigator,
                             recoveryCheckpoint,
@@ -141,11 +129,11 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     if (purchaseState == PurchaseRecoveryState.FinalPerkCurrentCandidate)
                     {
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "VerificarPerkFinalNoMadMikeAtual",
-                            "Compra, débito total de SP, créditos e Mad Mike atual coincidem com o checkpoint; " +
+                            "Compra, débito total de SP, créditos e veículo-alvo atual coincidem com o checkpoint; " +
                             "o BOT confirmará que o perk final está Adquirido sem pressionar Enter.");
-                        await CompletePartiallyUnlockedMadMikeAsync(
+                        await CompletePartiallyUnlockedVehicleAsync(
                             context,
                             navigator,
                             resources,
@@ -165,14 +153,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     }
 
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         "RetomarCompraConfirmada",
-                        "Autorização, débito exato da compra, saldo de SP inalterado e Mad Mike atual confirmados; " +
+                        "Autorização, débito exato da compra, saldo de SP inalterado e veículo-alvo atual confirmados; " +
                         "retomando a Maestria desde o início.");
                     context.Telemetry.UpdateStage(
                         "Retomando ciclo WheelSpin",
                         "Compra deste ciclo confirmada pelo checkpoint; iniciando a Maestria sem comprar outro carro.");
-                    await ResumePurchasedMadMikeAsync(context, navigator, cancellationToken);
+                    await ResumePurchasedVehicleAsync(context, navigator, cancellationToken);
                     recoveryCompleted = true;
                     break;
 
@@ -185,6 +173,21 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                         credits,
                         normalizedMastery,
                         cancellationToken);
+                    recoveryCompleted = true;
+                    break;
+
+                case SpinRecoveryStage.RemovalAuthorized:
+                    throw new CalibrationRequiredException(
+                        "A remoção do veículo-alvo foi autorizada antes de uma interrupção, mas não há prova persistida " +
+                        "de que o jogo a concluiu. O BOT não tentará remover outro carro. Revise a garagem, resolva manualmente " +
+                        $"o carro deste ciclo e só então exclua o checkpoint: {RecoveryCheckpointPath(context)}");
+
+                case SpinRecoveryStage.RemovalConfirmed:
+                    context.Logger.State(
+                        _profile.Workflow,
+                        "RemocaoConfirmadaRetomada",
+                        "O retorno estável à grade foi persistido após uma única confirmação de remoção; " +
+                        "nenhuma nova remoção será enviada.");
                     recoveryCompleted = true;
                     break;
 
@@ -211,10 +214,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     cancellationToken);
             }
         }
-        else if (IsMadMikeText(normalizedMastery))
+        else if (IsTargetVehicleText(normalizedMastery))
         {
             throw new CalibrationRequiredException(
-                "Há um Mad Mike selecionado sem checkpoint de compra/perk final criado pelo BOT. " +
+                "Há um veículo-alvo selecionado sem checkpoint de compra/perk final criado pelo BOT. " +
             "Por segurança, nenhum SP será gasto e nenhum carro será removido.");
         }
 
@@ -225,7 +228,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             spRefillIntent = null;
             spRefillActive = false;
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "ConcluirReabastecimentoSPRetomado",
                 $"A intenção persistida foi satisfeita pelo saldo exato de {SpRefillTarget} SP; " +
                 "o checkpoint foi removido antes de autorizar compras.");
@@ -233,7 +236,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         else if (spRefillActive)
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "RetomarReabastecimentoSP",
                 $"A intenção persistida exige {SpRefillTarget} SP e a releitura confirmou " +
                 $"{resources.SkillPoints} SP; o WheelSpin continuará o Farm de SP antes de qualquer compra.");
@@ -265,7 +268,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 }
 
                 context.Logger.State(
-                    Workflow,
+                    _profile.Workflow,
                     "ReabastecerSP",
                     $"Saldo exato de {resources.SkillPoints} SP ainda não atingiu a meta de reabastecimento; " +
                     $"encadeando Farm de SP até {SpRefillTarget}.");
@@ -281,7 +284,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 if (resumeInterruptedSpRefillAttempt)
                 {
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         "RetomarTentativaSPInterrompida",
                         $"A releitura exata avançou de {spRefillIntent!.LastObservedSkillPoints} para " +
                         $"{resources.SkillPoints} SP desde a interrupção; retomando a tentativa persistida " +
@@ -348,7 +351,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     10_000_000L,
                     checked((long)settings.PreserveCredits + settings.CreditsPerCar));
                 context.Logger.State(
-                    Workflow,
+                    _profile.Workflow,
                     "ReabastecerCR",
                     $"Saldo disponível de {spendableCredits:N0} CR não permite outro ciclo; " +
                     $"encadeando Farm de CR até {targetCredits:N0}.");
@@ -384,7 +387,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             var purchasesByCredits = spendableCredits / settings.CreditsPerCar;
             var purchases = (int)Math.Min(purchasesBySp, purchasesByCredits);
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "PlanejarCompras",
                 $"Saldo: {resources.SkillPoints} SP e {credits:N0} CR. " +
                 $"É possível concluir {purchases} compra(s) de {settings.SkillPointsPerCar} SP e " +
@@ -396,7 +399,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             for (var car = 1; car <= purchases; car++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                context.Logger.State(Workflow, "CicloCompra", $"Carro {car}/{purchases}.");
+                context.Logger.State(_profile.Workflow, "CicloCompra", $"Carro {car}/{purchases}.");
                 context.Telemetry.UpdateStage(
                     "Ciclo WheelSpin",
                     $"Carro {car}/{purchases}: iniciando compra, Maestria, troca e remoção.");
@@ -406,14 +409,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             }
 
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "LoteConcluido",
                 $"{purchases} compra(s) concluída(s); relendo recursos antes do próximo handoff.");
             (resources, credits) = await ReadResourcesAfterHandoffAsync(context, navigator, cancellationToken);
         }
     }
 
-    private static async Task<(MasterySnapshot Resources, long Credits)> ReadResourcesAfterHandoffAsync(
+    private async Task<(MasterySnapshot Resources, long Credits)> ReadResourcesAfterHandoffAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
@@ -432,13 +435,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "CreditosAposHandoffConfirmados",
             cancellationToken);
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "RecursosRevalidados",
             $"Handoff concluído com releitura exata: {resources.SkillPoints} SP e {credits:N0} CR.");
         return (resources, credits);
     }
 
-    private static async Task<long> ReadConfirmedCreditsAsync(
+    private async Task<long> ReadConfirmedCreditsAsync(
         AutomationContext context,
         GameNavigator navigator,
         string state,
@@ -467,31 +470,31 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
 
         var credits = consensus.Key;
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
             $"Saldo de CR confirmado em {consensus.Count()}/3 leituras: {credits:N0}.");
         return credits;
     }
 
-    private static PurchaseRecoveryState ClassifyPurchaseRecoveryState(
+    private PurchaseRecoveryState ClassifyPurchaseRecoveryState(
         SpinRecoveryCheckpoint checkpoint,
         MasterySnapshot resources,
         long credits,
         string normalizedMastery,
         int skillPointsPerCar)
     {
-        var isMadMike = IsMadMikeText(normalizedMastery);
+        var isTargetVehicle = IsTargetVehicleText(normalizedMastery);
         if (checkpoint.Stage == SpinRecoveryStage.PurchaseAuthorized &&
             resources.SkillPoints == checkpoint.SkillPointsBeforeMastery &&
             credits == checkpoint.CreditsBeforePurchase &&
-            !isMadMike)
+            !isTargetVehicle)
         {
             return PurchaseRecoveryState.NotCommitted;
         }
 
         if (resources.SkillPoints == checkpoint.SkillPointsBeforeMastery &&
             credits == checkpoint.CreditsAfterPurchase &&
-            isMadMike)
+            isTargetVehicle)
         {
             return PurchaseRecoveryState.PurchasedCurrent;
         }
@@ -501,7 +504,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             resources.SkillPoints == expectedAfterFinal &&
             credits == checkpoint.CreditsAfterPurchase)
         {
-            return isMadMike
+            return isTargetVehicle
                 ? PurchaseRecoveryState.FinalPerkCurrentCandidate
                 : PurchaseRecoveryState.FinalPerkCandidate;
         }
@@ -511,10 +514,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             $"SP checkpoint/tela: {checkpoint.SkillPointsBeforeMastery}/{resources.SkillPoints}; " +
             $"CR esperado sem compra: {checkpoint.CreditsBeforePurchase:N0}; " +
             $"CR esperado após compra: {checkpoint.CreditsAfterPurchase:N0}; tela: {credits:N0}; " +
-            $"Mad Mike atual: {(isMadMike ? "sim" : "não")}. Nenhum SP será gasto.");
+            $"veículo-alvo atual: {(isTargetVehicle ? "sim" : "não")}. Nenhum SP será gasto.");
     }
 
-    private static async Task RecoverFinalizedMadMikeFromInventoryAsync(
+    private async Task RecoverFinalizedVehicleFromInventoryAsync(
         AutomationContext context,
         GameNavigator navigator,
         SpinRecoveryCheckpoint checkpoint,
@@ -522,7 +525,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
     {
         context.Telemetry.UpdateStage(
             "Verificando ciclo interrompido",
-            "Selecionando o Mad Mike comprado e comprovando que o perk final já está adquirido.");
+            "Selecionando o veículo-alvo comprado e comprovando que o perk final já está adquirido.");
         await OpenMyCarsAsync(context, navigator, "RetomarMadMikeFinalizado", cancellationToken);
         await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
         await WaitForManufacturerOverlayAsync(
@@ -531,26 +534,26 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             cancellationToken);
         await SelectManufacturerAsync(
             context,
-            "FiltrarMazdaRetomarMadMikeFinalizado",
-            "MAZDA",
-            ["MAD MIKE 808", "#123 MAD MIKE", "MAD MIKE"],
+            "FiltrarFabricanteRetomarVeiculoFinalizado",
+            _profile.Manufacturer,
+            _profile.VehicleSearchTexts,
             cancellationToken);
-        if (!await FocusMadMikeCardAsync(
+        if (!await FocusTargetVehicleCardAsync(
                 context,
                 "MadMikeFinalizado",
                 cancellationToken,
                 allowAbsent: true))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "CicloInterrompidoJaRemovido",
-                "A busca limitada atravessou a seção Mazda sem encontrar Mad Mike; " +
+                "A busca limitada atravessou a seção da fabricante-alvo sem encontrar veículo-alvo; " +
                 "os débitos exatos indicam que este ciclo já foi concluído e removido.");
             return;
         }
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "EntrarMadMikeFinalizado",
             ["ENTRAR NO CARRO"],
             cancellationToken);
@@ -562,29 +565,29 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             TimeSpan.FromSeconds(30),
             cancellationToken);
         _ = await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "MadMikeFinalizadoAtivo",
             ["APRIMORAR E TUNAR"],
             cancellationToken,
             TimeSpan.FromMinutes(2));
         await ConfirmCurrentCarHeaderAsync(
             context,
-            expectMadMike: true,
+            expectTargetVehicle: true,
             "MadMikeFinalizadoAtivo",
             cancellationToken);
 
         var mastery = await navigator.OpenMasteryAndReadAsync(cancellationToken);
-        var expectedPoints = checkpoint.SkillPointsBeforeMastery - context.Settings.Spins.SkillPointsPerCar;
+        var expectedPoints = checkpoint.SkillPointsBeforeMastery - _profile.GetSettings(context.Settings).SkillPointsPerCar;
         if (mastery.SkillPoints != expectedPoints ||
-            !IsMadMikeText(GameVisionService.Normalize(mastery.OcrText)))
+            !IsTargetVehicleText(GameVisionService.Normalize(mastery.OcrText)))
         {
             throw new CalibrationRequiredException(
-                "O Mad Mike do ciclo interrompido foi selecionado, mas carro e SP não mantiveram o pós-estado esperado. " +
+                "O veículo-alvo do ciclo interrompido foi selecionado, mas carro e SP não mantiveram o pós-estado esperado. " +
                 "Nenhum perk será comprado nem carro removido.");
         }
 
         var normalized = GameVisionService.Normalize(mastery.OcrText);
-        if (!IsFinalWheelspinPerkText(normalized))
+        if (!IsFinalPerkText(normalized))
         {
             await TapRepeatedWithDelayAsync(context, GameKey.Left, 6, cancellationToken);
             await TapRepeatedWithDelayAsync(context, GameKey.Up, 6, cancellationToken);
@@ -596,22 +599,22 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         if (finalState != FinalPerkRecoveryState.Purchased)
         {
             throw new CalibrationRequiredException(
-                "O débito de SP coincidiu com o ciclo, mas o nó final do Mad Mike não foi confirmado como Adquirido. " +
+                "O débito de SP coincidiu com o ciclo, mas o nó final do veículo-alvo não foi confirmado como Adquirido. " +
                 "Nenhum SP adicional será gasto e o carro não será removido.");
         }
 
         PromoteFinalPerkCheckpoint(context, mastery.SkillPoints);
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "PerkFinalInterrompidoConfirmado",
-            "Nó final Adquirido confirmado diretamente no Mad Mike; retomando somente troca e remoção.");
+            "Nó final Adquirido confirmado diretamente no veículo-alvo; retomando somente troca e remoção.");
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
-        await RemoveMadMikeAsync(context, navigator, cancellationToken);
+        await RemoveTargetVehicleAsync(context, navigator, cancellationToken);
     }
 
-    private static async Task ResumePurchasedMadMikeAsync(
+    private async Task ResumePurchasedVehicleAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
@@ -619,15 +622,15 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         await UnlockMasteryAsync(context, navigator, cancellationToken);
         context.Telemetry.UpdateStage(
             "Trocando de carro",
-            "Ativando outro carro antes de remover o Mad Mike retomado após a compra.");
+            "Ativando outro carro antes de remover o veículo-alvo retomado após a compra.");
         await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
         context.Telemetry.UpdateStage(
-            "Removendo Mad Mike",
+            "Removendo veículo-alvo",
             "Localizando e removendo o carro após concluir a Maestria retomada.");
-        await RemoveMadMikeAsync(context, navigator, cancellationToken);
+        await RemoveTargetVehicleAsync(context, navigator, cancellationToken);
     }
 
-    private static async Task ResumeFinalPerkCheckpointAsync(
+    private async Task ResumeFinalPerkCheckpointAsync(
         AutomationContext context,
         GameNavigator navigator,
         SpinRecoveryCheckpoint checkpoint,
@@ -646,22 +649,22 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "ValidarCheckpointFinal",
             $"Checkpoint final confirmado com SP exato {skillPointsAfterFinal}. " +
             $"CR do recibo pós-compra={checkpoint.CreditsAfterPurchase:N0}; " +
             $"CR observado={credits:N0}; delta informativo={credits - checkpoint.CreditsAfterPurchase:+#,0;-#,0;0}.");
 
-        if (IsMadMikeText(normalizedMastery))
+        if (IsTargetVehicleText(normalizedMastery))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "RetomarCicloFinalConfirmado",
-                "Checkpoint do perk final e Mad Mike atual confirmados; retomando somente troca e remoção.");
+                "Checkpoint do perk final e veículo-alvo atual confirmados; retomando somente troca e remoção.");
             context.Telemetry.UpdateStage(
                 "Retomando ciclo WheelSpin",
                 "Confirmando o perk já adquirido antes da troca e remoção.");
-            await CompletePartiallyUnlockedMadMikeAsync(
+            await CompletePartiallyUnlockedVehicleAsync(
                 context,
                 navigator,
                 resources,
@@ -670,109 +673,109 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "RetomarRemocaoFinalConfirmada",
             "Checkpoint do perk final confirmado e outro carro já ativo; retomando somente a remoção.");
         context.Telemetry.UpdateStage(
             "Retomando remoção WheelSpin",
-            "Validando o carro atual antes de localizar o Mad Mike processado.");
+            "Validando o carro atual antes de localizar o veículo-alvo processado.");
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
-        await RemoveMadMikeAsync(
+        await RemoveTargetVehicleAsync(
             context,
             navigator,
             cancellationToken,
             allowAlreadyRemoved: true);
     }
 
-    private static async Task ExecuteCarCycleAsync(
+    private async Task ExecuteCarCycleAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
     {
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "CicloVisual",
             "Compra, Maestria, troca e remoção serão confirmadas visualmente em cada transição.");
 
         context.Telemetry.UpdateStage(
-            "Comprando Mad Mike",
+            "Comprando veículo-alvo",
             "Abrindo a concessionária e confirmando a compra do carro configurado.");
         await OpenDealerAsync(context, navigator, cancellationToken);
-        await BuyMadMikeAsync(context, cancellationToken);
+        await BuyTargetVehicleAsync(context, cancellationToken);
         context.Telemetry.UpdateStage(
             "Desbloqueando Maestria",
             "Aplicando os pontos e confirmando visualmente o perk final.");
         await UnlockMasteryAsync(context, navigator, cancellationToken);
         context.Telemetry.UpdateStage(
             "Trocando de carro",
-            "Ativando outro carro antes de remover o Mad Mike utilizado.");
+            "Ativando outro carro antes de remover o veículo-alvo utilizado.");
         await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
         context.Telemetry.UpdateStage(
-            "Removendo Mad Mike",
+            "Removendo veículo-alvo",
             "Localizando e removendo o carro após concluir a Maestria.");
-        await RemoveMadMikeAsync(context, navigator, cancellationToken);
+        await RemoveTargetVehicleAsync(context, navigator, cancellationToken);
         ClearRecoveryCheckpoint(context);
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "CicloVisualConcluido",
-            "Mad Mike comprado, Maestria confirmada, outro carro ativado e Mad Mike removido.");
+            "veículo-alvo comprado, Maestria confirmada, outro carro ativado e veículo-alvo removido.");
     }
 
-    private static async Task OpenDealerAsync(
+    private async Task OpenDealerAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
     {
         if (await context.Vision.ContainsAnyTextAsync(["COMPRAR CARRO"], cancellationToken))
         {
-            context.Logger.State(Workflow, "Concessionaria", "Tela Comprar Carro já aberta.");
+            context.Logger.State(_profile.Workflow, "Concessionaria", "Tela Comprar Carro já aberta.");
             return;
         }
 
         await navigator.ReturnToGarageMenuAsync(cancellationToken);
         await navigator.OpenBuySellTabAsync(cancellationToken);
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "Concessionaria",
             "Normalizando no topo e abrindo Concessionária com o controle virtual.");
         await TapRepeatedAsync(context, GameKey.Up, 8, cancellationToken);
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "ComprarCarro",
             ["COMPRAR CARRO"],
             cancellationToken,
             TimeSpan.FromMinutes(2));
     }
 
-    private static async Task BuyMadMikeAsync(
+    private async Task BuyTargetVehicleAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
-        context.Logger.State(Workflow, "Fabricante", "Abrindo Ir para Fabricante com Backspace.");
+        context.Logger.State(_profile.Workflow, "Fabricante", "Abrindo Ir para Fabricante com Backspace.");
         await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
         await WaitForManufacturerOverlayAsync(context, "ListaFabricantesCompra", cancellationToken);
         await SelectManufacturerAsync(
             context,
-            "SelecionarMazdaCompra",
-            "MAZDA",
-            ["MAD MIKE 808", "#123 MAD MIKE", "MAD MIKE"],
+            "SelecionarFabricanteCompra",
+            _profile.Manufacturer,
+            _profile.VehicleSearchTexts,
             cancellationToken);
-        await FocusMadMikeCardAsync(context, "SelecionarMadMike", cancellationToken);
+        await FocusTargetVehicleCardAsync(context, "SelecionarMadMike", cancellationToken);
 
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
 
         _ = await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "CoresFabricante",
             ["CORES DO FABRICANTE"],
             cancellationToken);
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "CoresFabricante",
-            "Cartão Mad Mike aberto; cada próximo A dependerá do estado visual estável da compra.");
+            "Cartão veículo-alvo aberto; cada próximo A dependerá do estado visual estável da compra.");
 
         var purchaseCompleted = false;
         try
@@ -784,7 +787,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 {
                     case PurchaseScreenKind.Colors:
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "ConfirmarCor",
                             $"Cores do Fabricante confirmada ({step}/6); escolhendo a cor padrão.");
                         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
@@ -793,9 +796,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
 
                     case PurchaseScreenKind.PriceDetails:
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "ConfirmarPreco",
-                            $"Preço de 100.000 CR confirmado dentro da faixa amarela ({step}/6); abrindo a confirmação.");
+                            $"Preço de {_profile.GetSettings(context.Settings).CreditsPerCar:N0} CR confirmado " +
+                            $"dentro da faixa amarela ({step}/6); abrindo a confirmação.");
                         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
                         await Task.Delay(250, cancellationToken);
                         break;
@@ -804,25 +808,25 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                         await ConfirmPurchaseModalAsync(context, cancellationToken);
                         SavePurchaseAuthorizationCheckpoint(context);
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "ConfirmarCompra",
                             "Prompt, preço e opção exata Comprar focada foram confirmados em duas de três capturas; " +
                             "a autorização foi persistida antes do A.");
                         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
 
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             "Apresentacao",
                             "Aguardando o fim da apresentação do carro comprado.");
                         await context.Vision.WaitForAnyTextAsync(
-                            Workflow,
+                            _profile.Workflow,
                             "FimApresentacao",
                             ["EXPLODIR", "MODO FOTO", "OCULTAR UI", "ALTERNAR ALTURA DA CÂMERA"],
                             cancellationToken,
                             TimeSpan.FromMinutes(4));
                         PromotePurchaseCheckpoint(context);
                         purchaseCompleted = true;
-                        context.Resources.AdjustCredits(-context.Settings.Spins.CreditsPerCar);
+                        context.Resources.AdjustCredits(-_profile.GetSettings(context.Settings).CreditsPerCar);
                         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
                         return;
 
@@ -851,7 +855,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static async Task UnlockMasteryAsync(
+    private async Task UnlockMasteryAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
@@ -863,35 +867,47 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         await navigator.EnsureGarageAsync(cancellationToken);
         var mastery = await navigator.OpenMasteryAndReadAsync(cancellationToken);
         var normalizedCar = GameVisionService.Normalize(mastery.OcrText);
-        if (!IsMadMikeText(normalizedCar))
+        if (!IsTargetVehicleText(normalizedCar))
         {
             throw new CalibrationRequiredException(
-                "A tela de Maestria não confirmou que o carro atual é o Mad Mike. " +
+                $"A tela de Maestria não confirmou que o carro atual é {_profile.VehicleName}. " +
                 "Nenhum ponto de habilidade foi gasto.");
         }
 
         context.Logger.State(
-            Workflow,
-            "ConfirmarMadMikeNaMaestria",
-            "Mad Mike confirmado pelo OCR antes de gastar pontos de habilidade.");
-        if (mastery.SkillPoints < context.Settings.Spins.SkillPointsPerCar)
+            _profile.Workflow,
+            "ConfirmarVeiculoNaMaestria",
+            $"{_profile.VehicleName} confirmado pelo OCR antes de gastar pontos de habilidade.");
+        var settings = _profile.GetSettings(context.Settings);
+        if (mastery.SkillPoints < settings.SkillPointsPerCar)
         {
             throw new AutomationFaultException(
-                $"Há somente {mastery.SkillPoints} SP; são necessários {context.Settings.Spins.SkillPointsPerCar}.");
+                $"Há somente {mastery.SkillPoints} SP; são necessários {settings.SkillPointsPerCar}.");
         }
 
-        // Rota de 30 SP: XP inferior esquerdo -> perk inferior central ->
-        // sobe toda a coluna central -> wheelspin superior direito.
-        GameKey?[] directions = [GameKey.Right, GameKey.Up, GameKey.Up, GameKey.Up, GameKey.Right, null];
+        if (_profile.NormalizeMasteryFocusToBottomLeft)
+        {
+            context.Logger.State(
+                _profile.Workflow,
+                "NormalizarRaizMaestria",
+                "Levando o foco aos limites esquerdo e inferior da árvore antes do primeiro gasto de SP.");
+            await TapRepeatedWithDelayAsync(context, GameKey.Left, 6, cancellationToken);
+            await TapRepeatedWithDelayAsync(context, GameKey.Down, 6, cancellationToken);
+        }
+
+        var directions = _profile.MasteryDirections;
         double? finalPerkBaseline = null;
-        for (var index = 0; index < directions.Length; index++)
+        for (var index = 0; index < directions.Count; index++)
         {
             await context.Vision.WaitForAnyTextAsync(
-                Workflow,
+                _profile.Workflow,
                 $"SelecionarPerk{index + 1}",
                 ["SELECIONAR"],
                 cancellationToken);
-            if (index == directions.Length - 1)
+            var isFinalPerk = index == directions.Count - 1;
+            var hasDedicatedTextCheck = _profile.MasteryTextChecks.Any(check =>
+                check.PurchaseIndex == index);
+            if (isFinalPerk)
             {
                 finalPerkBaseline = await ConfirmFinalWheelspinPerkAsync(
                     context,
@@ -900,16 +916,34 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     "WheelspinFinalFocado",
                     cancellationToken);
             }
+            else if (hasDedicatedTextCheck)
+            {
+                await ConfirmExpectedMasteryPerkAsync(
+                    context,
+                    index,
+                    purchased: false,
+                    cancellationToken);
+            }
+
             await context.Input.TapAsync(GameKey.Enter, cancellationToken);
             // "Voltar" e "Desbloquear Tudo" já existem antes da compra e
             // não confirmam que a animação acabou. Durante essa animação o
             // Forza ignora o direcional seguinte. O teste real mostrou que o
             // marcador rosa e o débito de SP estabilizam em cerca de 2 s.
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 $"ConfirmarPerk{index + 1}",
                 "Aguardando a animação de aquisição terminar antes do próximo direcional.");
             await Task.Delay(MasteryAnimationDelayMs, cancellationToken);
+            if (!isFinalPerk && hasDedicatedTextCheck)
+            {
+                await ConfirmExpectedMasteryPerkAsync(
+                    context,
+                    index,
+                    purchased: true,
+                    cancellationToken);
+            }
+
             if (directions[index] is { } direction)
             {
                 await context.Input.TapAsync(direction, cancellationToken);
@@ -923,7 +957,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "WheelspinFinalComprado",
             cancellationToken);
 
-        var expectedPoints = Math.Max(0, mastery.SkillPoints - context.Settings.Spins.SkillPointsPerCar);
+        var expectedPoints = Math.Max(0, mastery.SkillPoints - settings.SkillPointsPerCar);
         var confirmedPoints = await navigator.ReadMasterySkillPointsAsync(cancellationToken);
         if (confirmedPoints != expectedPoints)
         {
@@ -933,37 +967,37 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "MaestriaConcluida",
-            $"Perk final rosa e débito exato de {context.Settings.Spins.SkillPointsPerCar} SP confirmados.");
+            $"Perk final rosa e débito exato de {settings.SkillPointsPerCar} SP confirmados.");
         PromoteFinalPerkCheckpoint(context, confirmedPoints);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
     }
 
-    private static async Task CompletePartiallyUnlockedMadMikeAsync(
+    private async Task CompletePartiallyUnlockedVehicleAsync(
         AutomationContext context,
         GameNavigator navigator,
         MasterySnapshot mastery,
         CancellationToken cancellationToken)
     {
         var normalized = GameVisionService.Normalize(mastery.OcrText);
-        if (!IsMadMikeText(normalized))
+        if (!IsTargetVehicleText(normalized))
         {
             throw new CalibrationRequiredException(
-                "A retomada parcial perdeu a confirmação do Mad Mike atual; nenhum SP foi gasto.");
+                "A retomada parcial perdeu a confirmação do veículo-alvo atual; nenhum SP foi gasto.");
         }
 
-        if (!IsFinalWheelspinPerkText(normalized))
+        if (!IsFinalPerkText(normalized))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "LocalizarWheelspinFinalPendente",
                 "Normalizando o foco na árvore e indo ao nó superior direito sem pressionar A.");
             // A malha possui limites estáveis. Esquerda leva à primeira coluna,
             // Cima à primeira linha e Direita ao nó final. Nenhum desses passos
             // gasta SP; o OCR localizado e o marcador CV abaixo ainda precisam
-            // confirmar Mago da Roleta antes do Enter.
+            // confirmar perk final antes do Enter.
             await TapRepeatedWithDelayAsync(context, GameKey.Left, 6, cancellationToken);
             await TapRepeatedWithDelayAsync(context, GameKey.Up, 6, cancellationToken);
             await TapRepeatedWithDelayAsync(context, GameKey.Right, 6, cancellationToken);
@@ -974,7 +1008,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         if (recoveryState != FinalPerkRecoveryState.Purchased)
         {
             throw new CalibrationRequiredException(
-                "O checkpoint afirma que o perk final já foi adquirido, mas o nó Mago da Roleta apareceu bloqueado ou inconclusivo. " +
+                "O checkpoint afirma que o perk final já foi adquirido, mas o nó perk final apareceu bloqueado ou inconclusivo. " +
                 "Nenhum Enter será enviado, nenhum SP será gasto e o carro não será removido.");
         }
 
@@ -987,34 +1021,34 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "WheelspinFinalJaAdquirido",
-            "Mago da Roleta confirmado como Adquirido por OCR e preenchimento rosa; nenhum Enter foi enviado.");
+            "perk final confirmado como Adquirido por OCR e preenchimento rosa; nenhum Enter foi enviado.");
         PromoteFinalPerkCheckpoint(context, unchangedPoints);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
 
         context.Telemetry.UpdateStage(
             "Trocando de carro",
-            "Ativando outro carro antes de remover o Mad Mike retomado.");
+            "Ativando outro carro antes de remover o veículo-alvo retomado.");
         await SwitchToAnotherCarAsync(context, navigator, cancellationToken);
         context.Telemetry.UpdateStage(
-            "Removendo Mad Mike",
+            "Removendo veículo-alvo",
             "Localizando e removendo o carro após concluir a Maestria retomada.");
-        await RemoveMadMikeAsync(context, navigator, cancellationToken);
+        await RemoveTargetVehicleAsync(context, navigator, cancellationToken);
     }
 
-    private static async Task SwitchToAnotherCarAsync(
+    private async Task SwitchToAnotherCarAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken)
     {
-        await ConfirmCurrentCarHeaderAsync(context, expectMadMike: true, "MadMikeAtual", cancellationToken);
+        await ConfirmCurrentCarHeaderAsync(context, expectTargetVehicle: true, "MadMikeAtual", cancellationToken);
         await OpenMyCarsAsync(context, navigator, "TrocarCarro", cancellationToken);
-        await MoveFocusAwayFromMadMikeAsync(context, cancellationToken);
+        await MoveFocusAwayFromTargetVehicleAsync(context, cancellationToken);
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "EntrarOutroCarro",
             ["ENTRAR NO CARRO"],
             cancellationToken);
@@ -1027,58 +1061,58 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             TimeSpan.FromSeconds(30),
             cancellationToken);
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "AguardarTrocaDeCarro",
             "Aguardando a grade fechar e a opção Aprimorar e Tunar reaparecer na aba Carros.");
         _ = await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "OutroCarroConfirmado",
             ["APRIMORAR E TUNAR"],
             cancellationToken,
             TimeSpan.FromMinutes(2));
-        await ConfirmCurrentCarIsNotMadMikeAsync(context, "OutroCarroConfirmado", cancellationToken);
+        await ConfirmCurrentCarIsNotTargetVehicleAsync(context, "OutroCarroConfirmado", cancellationToken);
     }
 
-    private static async Task RemoveMadMikeAsync(
+    private async Task RemoveTargetVehicleAsync(
         AutomationContext context,
         GameNavigator navigator,
         CancellationToken cancellationToken,
         bool allowAlreadyRemoved = false)
     {
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "RemoverCarro",
             "Normalizando o estado atual e abrindo Meus Carros antes da remoção identificada.");
-        await ConfirmCurrentCarIsNotMadMikeAsync(context, "AntesDaRemocao", cancellationToken);
+        await ConfirmCurrentCarIsNotTargetVehicleAsync(context, "AntesDaRemocao", cancellationToken);
         await OpenMyCarsAsync(context, navigator, "RemoverCarro", cancellationToken);
         await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
         await WaitForManufacturerOverlayAsync(context, "ListaFabricantesRemocao", cancellationToken);
 
         await SelectManufacturerAsync(
             context,
-            "FiltrarMazda",
-            "MAZDA",
-            ["MAD MIKE 808", "#123 MAD MIKE", "MAD MIKE"],
+            "FiltrarFabricante",
+            _profile.Manufacturer,
+            _profile.VehicleSearchTexts,
             cancellationToken);
 
-        var madMikeFound = await FocusMadMikeCardAsync(
+        var targetVehicleFound = await FocusTargetVehicleCardAsync(
             context,
             "MadMikeRemocao",
             cancellationToken,
             allowAbsent: allowAlreadyRemoved);
-        if (!madMikeFound)
+        if (!targetVehicleFound)
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "RemocaoJaConcluida",
-                "A seção Mazda foi percorrida e a ausência do Mad Mike permaneceu estável em duas de três capturas; " +
+                "A seção da fabricante-alvo foi percorrida e a ausência do veículo-alvo permaneceu estável em duas de três capturas; " +
                 "a remoção do checkpoint já havia sido concluída.");
             return;
         }
 
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         var removeAction = await context.Vision.WaitForAnyTextAsync(
-            Workflow,
+            _profile.Workflow,
             "AcoesDoMadMike",
             ["REMOVER CARRO DA GARAGEM"],
             cancellationToken);
@@ -1108,20 +1142,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 yes: true,
                 "ConfirmarRemocaoSimFocado",
                 cancellationToken);
+            PromoteRemovalAuthorizedCheckpoint(context);
             await context.Input.TapAsync(GameKey.Enter, cancellationToken);
-            await WaitForTextToDisappearAsync(
-                context,
-                "RemocaoProcessada",
-                ["QUER MESMO REMOVER"],
-                TimeSpan.FromSeconds(20),
-                cancellationToken);
-            await context.Vision.WaitForAnyTextAsync(
-                Workflow,
-                "RemocaoConcluida",
-                ["MEUS CARROS", "IR PARA FABRICANTE"],
-                cancellationToken,
-                TimeSpan.FromSeconds(20));
-            await ConfirmMadMikeAbsentAfterRemovalAsync(context, cancellationToken);
+            await ConfirmRemovalProcessedAndGridStableAsync(context, cancellationToken);
+            PromoteRemovalConfirmedCheckpoint(context);
             removalCompleted = true;
             await context.Input.TapAsync(GameKey.Escape, cancellationToken);
         }
@@ -1137,46 +1161,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static async Task ConfirmMadMikeAbsentAfterRemovalAsync(
-        AutomationContext context,
-        CancellationToken cancellationToken)
-    {
-        context.Logger.State(
-            Workflow,
-            "VerificarAusenciaAposRemocao",
-            "Reabrindo o filtro Mazda para comprovar que o Mad Mike removido não permanece no inventário.");
-        await context.Input.TapAsync(GameKey.Backspace, cancellationToken);
-        await WaitForManufacturerOverlayAsync(
-            context,
-            "ListaFabricantesVerificarRemocao",
-            cancellationToken);
-        await SelectManufacturerAsync(
-            context,
-            "FiltrarMazdaVerificarRemocao",
-            "MAZDA",
-            ["MAD MIKE 808", "#123 MAD MIKE", "MAD MIKE"],
-            cancellationToken);
-
-        if (await FocusMadMikeCardAsync(
-                context,
-                "VerificarAusenciaMadMike",
-                cancellationToken,
-                allowAbsent: true))
-        {
-            throw await CreateFailureAsync(
-                context,
-                "MadMikeAindaPresente",
-                "O modal fechou, mas um cartão Mad Mike ainda foi confirmado na seção Mazda. " +
-                "O checkpoint será mantido e o ciclo não será concluído.");
-        }
-
-        context.Logger.State(
-            Workflow,
-            "AusenciaMadMikeConfirmada",
-            "A seção Mazda foi percorrida até a próxima fabricante e a ausência do Mad Mike foi confirmada em duas de três capturas.");
-    }
-
-    private static async Task TryCancelPendingPromptAsync(
+    private async Task TryCancelPendingPromptAsync(
         AutomationContext context,
         IReadOnlyCollection<string> prompts,
         string state)
@@ -1235,7 +1220,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     if (removalMisses >= 2)
                     {
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             state,
                             "Confirmação destrutiva cancelada pela opção Não em duas capturas consecutivas.");
                         return;
@@ -1262,7 +1247,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 if (misses >= 2)
                 {
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         state,
                         "Confirmação destrutiva cancelada em duas capturas consecutivas.");
                     return;
@@ -1285,7 +1270,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static Task<PendingPromptProbe> ProbePendingPromptAsync(
+    private Task<PendingPromptProbe> ProbePendingPromptAsync(
         AutomationContext context,
         IReadOnlyCollection<string> prompts,
         CancellationToken cancellationToken) =>
@@ -1303,7 +1288,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             },
             cancellationToken);
 
-    private static async Task WaitForTextToDisappearAsync(
+    private async Task WaitForTextToDisappearAsync(
         AutomationContext context,
         string state,
         IReadOnlyCollection<string> texts,
@@ -1325,7 +1310,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 if (consecutiveMisses >= 2)
                 {
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         state,
                         $"Texto anterior desapareceu de duas capturas consecutivas: [{string.Join(" | ", texts)}].");
                     return;
@@ -1339,7 +1324,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             $"A transição '{state}' não foi confirmada: [{string.Join(" | ", texts)}] permaneceu visível.");
     }
 
-    private static async Task CancelPendingDecisionAsync(
+    private async Task CancelPendingDecisionAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
@@ -1347,7 +1332,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         if (await HasStablePromptAsync(context, removalPrompts, cancellationToken))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "CancelarDecisaoPendente",
                 "Modal de remoção pendente detectado antes da navegação; selecionando Não com confirmação OCR/CV.");
             await TryCancelPendingPromptAsync(
@@ -1360,7 +1345,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         if (await HasStablePromptAsync(context, purchasePrompts, cancellationToken))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 "CancelarDecisaoPendente",
                 "Confirmação de compra pendente detectada antes da navegação; cancelando com B.");
             await context.Input.TapAsync(GameKey.Escape, cancellationToken);
@@ -1382,7 +1367,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static async Task<bool> HasStablePromptAsync(
+    private async Task<bool> HasStablePromptAsync(
         AutomationContext context,
         IReadOnlyCollection<string> prompts,
         CancellationToken cancellationToken)
@@ -1404,18 +1389,21 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return confirmations >= 2;
     }
 
-    private static async Task<PurchaseScreenSnapshot> WaitForStablePurchaseScreenAsync(
+    private async Task<PurchaseScreenSnapshot> WaitForStablePurchaseScreenAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var expectedCredits = _profile.GetSettings(context.Settings).CreditsPerCar;
         PurchaseScreenKind lastKind = PurchaseScreenKind.Unknown;
         PurchaseScreenSnapshot? latest = null;
         var consecutive = 0;
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            latest = await context.Vision.AnalyzeScreenAsync(AnalyzePurchaseScreen, cancellationToken);
+            latest = await context.Vision.AnalyzeScreenAsync(
+                (bitmap, document) => AnalyzePurchaseScreen(bitmap, document, expectedCredits),
+                cancellationToken);
 
             // Um possível modal sempre ganha precedência. Seus campos e seu
             // realce ainda serão validados em capturas novas antes do Enter.
@@ -1452,10 +1440,11 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             $"A tela de compra não estabilizou em um estado conhecido. Última leitura: {latest?.Evidence ?? "nenhuma"}.");
     }
 
-    private static async Task ConfirmPurchaseModalAsync(
+    private async Task ConfirmPurchaseModalAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
+        var expectedCredits = _profile.GetSettings(context.Settings).CreditsPerCar;
         var confirmations = 0;
         var bestFocusRatio = 0d;
         string lastEvidence = "modal não reconhecido";
@@ -1464,7 +1453,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             var check = await context.Vision.AnalyzeScreenAsync(
                 (bitmap, document) =>
                 {
-                    var snapshot = AnalyzePurchaseScreen(bitmap, document);
+                    var snapshot = AnalyzePurchaseScreen(bitmap, document, expectedCredits);
                     if (snapshot.Kind != PurchaseScreenKind.PurchaseModal ||
                         !snapshot.HasExpectedPrice ||
                         snapshot.PurchaseAction is null)
@@ -1502,12 +1491,69 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             throw await CreateFailureAsync(
                 context,
                 "ConfirmarCompra",
-                "O modal não confirmou em duas capturas o prompt de compra por 100.000 CR e a opção exata Comprar " +
+                $"O modal não confirmou em duas capturas o prompt de compra por {expectedCredits:N0} CR e a opção exata Comprar " +
                 $"com realce verde. Melhor foco={bestFocusRatio:P2}; última leitura={lastEvidence}.");
         }
     }
 
-    private static PurchaseScreenSnapshot AnalyzePurchaseScreen(Bitmap bitmap, OcrDocument document)
+    private async Task ConfirmRemovalProcessedAndGridStableAsync(
+        AutomationContext context,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        var consecutiveConfirmations = 0;
+        string lastEvidence = "nenhuma captura";
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var probe = await context.Vision.AnalyzeScreenAsync(
+                (bitmap, document) =>
+                {
+                    var classical = new ClassicalGameStateDetector().Analyze(bitmap);
+                    var normalized = GameVisionService.Normalize(document.Text);
+                    var hasRemovalPrompt = CompactText(normalized)
+                        .Contains("QUERMESMOREMOVER", StringComparison.Ordinal);
+                    var hasBlockingModal = classical.Kind is
+                        ClassicalGameStateKind.ConfirmationDialog or
+                        ClassicalGameStateKind.ControllerDisconnected;
+                    var grid = AnalyzeTargetVehicleGrid(bitmap, document);
+                    var valid = !hasRemovalPrompt &&
+                                !hasBlockingModal &&
+                                grid.IsCarGrid &&
+                                grid.FocusedCell >= 0;
+                    return new RemovalCompletionProbe(
+                        valid,
+                        $"prompt={(hasRemovalPrompt ? "sim" : "não")}, " +
+                        $"estrutura={classical.Kind}, grade={(grid.IsCarGrid ? "sim" : "não")}, " +
+                        $"foco={grid.FocusedCell}");
+                },
+                cancellationToken);
+            lastEvidence = probe.Evidence;
+            consecutiveConfirmations = probe.Valid ? consecutiveConfirmations + 1 : 0;
+            if (consecutiveConfirmations >= 2)
+            {
+                context.Logger.State(
+                    _profile.Workflow,
+                    "RemocaoConcluida",
+                    "O modal desapareceu e a grade focada reapareceu sem estrutura clássica conflitante " +
+                    "em duas capturas consecutivas.");
+                return;
+            }
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        throw await CreateFailureAsync(
+            context,
+            "RemocaoProcessadaInconclusiva",
+            "A remoção foi autorizada, mas o retorno estável à grade sem modal não foi confirmado. " +
+            $"Nenhuma nova remoção será tentada. Última evidência: {lastEvidence}.");
+    }
+
+    private PurchaseScreenSnapshot AnalyzePurchaseScreen(
+        Bitmap bitmap,
+        OcrDocument document,
+        int expectedCredits)
     {
         var compactDocument = CompactText(document.Text);
         var lines = document.Lines
@@ -1523,21 +1569,19 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                             compactDocument.Contains("COMPRARVALESCARRO", StringComparison.Ordinal);
         if (modalDetected)
         {
-            var expectedPrice = purchasePrompt is not null && Regex.IsMatch(
-                GameVisionService.Normalize(purchasePrompt.Text),
-                @"(?<![0-9])100[.\s]?000(?:\s+[O0])?(?![0-9])",
-                RegexOptions.CultureInvariant);
+            var expectedPrice = purchasePrompt is not null &&
+                                ContainsExpectedPrice(purchasePrompt.Text, expectedCredits);
             return new PurchaseScreenSnapshot(
                 PurchaseScreenKind.PurchaseModal,
                 purchaseAction,
                 expectedPrice,
                 $"modal=sim, prompt={(purchasePrompt is null ? "não" : "sim")}, " +
-                $"preço={(expectedPrice ? "100.000" : "inconclusivo")}, " +
+                $"preço={(expectedPrice ? expectedCredits.ToString("N0") : "inconclusivo")}, " +
                 $"ação={(purchaseAction is null ? "ausente" : "COMPRAR")}");
         }
 
         var priceLine = lines
-            .Where(item => IsExpectedStandalonePrice(item.Compact))
+            .Where(item => IsExpectedStandalonePrice(item.Compact, expectedCredits))
             .Select(item => new
             {
                 item.Line,
@@ -1551,7 +1595,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 PurchaseScreenKind.PriceDetails,
                 null,
                 true,
-                $"preço amarelo 100.000 CR={priceLine.YellowRatio:P1}");
+                $"preço amarelo {expectedCredits:N0} CR={priceLine.YellowRatio:P1}");
         }
 
         if (compactDocument.Contains("CORESDOFABRICANTE", StringComparison.Ordinal))
@@ -1570,17 +1614,33 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             $"OCR={Shorten(GameVisionService.Normalize(document.Text))}");
     }
 
-    private static bool IsExpectedStandalonePrice(string compact) =>
-        compact is "100000" or "CR100000" or "100000CR";
+    private bool IsExpectedStandalonePrice(string compact, int expectedCredits)
+    {
+        var digits = expectedCredits.ToString();
+        var normalizedDigits = compact.Replace('O', '0');
+        return normalizedDigits == digits ||
+               normalizedDigits == $"CR{digits}" ||
+               normalizedDigits == $"{digits}CR";
+    }
 
-    private static string CompactText(string text) =>
+    private bool ContainsExpectedPrice(string text, int expectedCredits)
+    {
+        var digits = expectedCredits.ToString();
+        var normalizedDigits = CompactText(text).Replace('O', '0');
+        return Regex.IsMatch(
+            normalizedDigits,
+            $@"(?<![0-9]){Regex.Escape(digits)}(?![0-9])",
+            RegexOptions.CultureInvariant);
+    }
+
+    private string CompactText(string text) =>
         Regex.Replace(
             GameVisionService.Normalize(text),
             @"[^A-Z0-9]",
             string.Empty,
             RegexOptions.CultureInvariant);
 
-    private static double YellowPriceFillRatio(Bitmap bitmap, OcrLine priceLine)
+    private double YellowPriceFillRatio(Bitmap bitmap, OcrLine priceLine)
     {
         var centerX = priceLine.Center.X / (double)bitmap.Width;
         var centerY = priceLine.Center.Y / (double)bitmap.Height;
@@ -1610,7 +1670,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return sampled == 0 ? 0 : matching / (double)sampled;
     }
 
-    private static RectangleF ActionSelectionRegion(
+    private RectangleF ActionSelectionRegion(
         Bitmap bitmap,
         OcrLine action,
         float width = 0.60f,
@@ -1625,7 +1685,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             height);
     }
 
-    private static double BestActionFocusScore(Bitmap bitmap, OcrLine action)
+    private double BestActionFocusScore(Bitmap bitmap, OcrLine action)
     {
         ReadOnlySpan<float> widths = [0.32f, 0.40f, 0.50f, 0.60f];
         ReadOnlySpan<float> heights = [0.09f, 0.11f, 0.13f];
@@ -1645,7 +1705,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return best;
     }
 
-    private static double LimeHorizontalBorderScore(Bitmap bitmap, RectangleF normalizedRegion)
+    private double LimeHorizontalBorderScore(Bitmap bitmap, RectangleF normalizedRegion)
     {
         var region = ToPixels(bitmap, normalizedRegion);
         var centerY = region.Top + region.Height / 2;
@@ -1679,7 +1739,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return Math.Min(bestAbove, bestBelow);
     }
 
-    private static async Task ConfirmActionFocusedAsync(
+    private async Task ConfirmActionFocusedAsync(
         AutomationContext context,
         OcrLine action,
         string state,
@@ -1722,12 +1782,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
             $"Opção exata '{action.Text}' confirmada pelo realce verde bilateral em duas de três capturas.");
     }
 
-    private static async Task ConfirmRemovalChoiceFocusedAsync(
+    private async Task ConfirmRemovalChoiceFocusedAsync(
         AutomationContext context,
         bool yes,
         string state,
@@ -1776,12 +1836,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
             $"Opção {(yes ? "Sim" : "Não")} confirmada pelo contorno verde em duas de três capturas.");
     }
 
-    private static async Task ConfirmRemovalDialogAsync(
+    private async Task ConfirmRemovalDialogAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
@@ -1814,13 +1874,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             "ConfirmarRemocao",
             "Título, pergunta e opções Sim/Não do modal confirmados na mesma área central em duas de três capturas; " +
-            "a identidade Mad Mike já foi fixada pelo cartão e pela ação exata imediatamente anteriores.");
+            "a identidade veículo-alvo já foi fixada pelo cartão e pela ação exata imediatamente anteriores.");
     }
 
-    private static RemovalDialogCheck AnalyzeRemovalDialog(Bitmap bitmap, OcrDocument document)
+    private RemovalDialogCheck AnalyzeRemovalDialog(Bitmap bitmap, OcrDocument document)
     {
         var classical = new ClassicalGameStateDetector().Analyze(bitmap);
         if (classical.Kind is not (
@@ -1866,14 +1926,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             : new RemovalDialogCheck(false, "prompt de remoção fora da área central do modal");
     }
 
-    private static bool IsInsideRemovalModal(Bitmap bitmap, OcrLine line)
+    private bool IsInsideRemovalModal(Bitmap bitmap, OcrLine line)
     {
         var centerX = line.Center.X / (double)bitmap.Width;
         var centerY = line.Center.Y / (double)bitmap.Height;
         return centerX is >= 0.28 and <= 0.72 && centerY is >= 0.30 and <= 0.72;
     }
 
-    private static async Task<FinalPerkRecoveryState> ConfirmFinalPerkRecoveryStateAsync(
+    private async Task<FinalPerkRecoveryState> ConfirmFinalPerkRecoveryStateAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
@@ -1886,12 +1946,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 (bitmap, document) =>
                 {
                     var normalized = GameVisionService.Normalize(document.Text);
-                    if (!IsFinalWheelspinPerkText(normalized))
+                    if (!IsFinalPerkText(normalized))
                     {
                         return new FinalPerkRecoveryObservation(FinalPerkRecoveryState.Unknown, 0);
                     }
 
-                    var magentaRatio = MagentaFillRatio(bitmap, FinalPerkIconRegion);
+                    var magentaRatio = MagentaFillRatio(bitmap, _profile.FinalPerkIconRegion);
                     if (normalized.Contains("ADQUIRIDO", StringComparison.Ordinal) &&
                         magentaRatio >= FinalPerkPurchasedMagentaRatio)
                     {
@@ -1929,11 +1989,59 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         throw await CreateFailureAsync(
             context,
             "EstadoWheelspinFinalInconclusivo",
-            "O nó Mago da Roleta não estabilizou como pendente ou Adquirido em duas de três capturas. " +
+            "O nó perk final não estabilizou como pendente ou Adquirido em duas de três capturas. " +
             $"Preenchimento rosa observado: {string.Join(", ", ratios.Select(value => value.ToString("P2")))}.");
     }
 
-    private static async Task<double> ConfirmFinalWheelspinPerkAsync(
+    private async Task ConfirmExpectedMasteryPerkAsync(
+        AutomationContext context,
+        int purchaseIndex,
+        bool purchased,
+        CancellationToken cancellationToken)
+    {
+        var confirmations = 0;
+        var conflicts = 0;
+        var observations = new List<string>(3);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            observations.Add(Shorten(normalized));
+            var hasExpectedState = normalized.Contains(
+                purchased ? "ADQUIRIDO" : "SELECIONAR",
+                StringComparison.Ordinal);
+            if (_profile.MatchesMasteryText(purchaseIndex, normalized) && hasExpectedState)
+            {
+                confirmations++;
+            }
+            else if (hasExpectedState)
+            {
+                conflicts++;
+            }
+
+            if (attempt < 2)
+            {
+                await Task.Delay(160, cancellationToken);
+            }
+        }
+
+        if (confirmations < 2 || conflicts > 0)
+        {
+            throw await CreateFailureAsync(
+                context,
+                $"PerkEspecifico{purchaseIndex + 1}{(purchased ? "Adquirido" : "Focado")}",
+                $"O perk específico da etapa {purchaseIndex + 1} não confirmou " +
+                $"{(purchased ? "Adquirido" : "Selecionar")} e o texto esperado em duas de três capturas sem conflito. " +
+                $"OCR: '{string.Join(" | ", observations)}'.");
+        }
+
+        context.Logger.State(
+            _profile.Workflow,
+            $"PerkEspecifico{purchaseIndex + 1}{(purchased ? "Adquirido" : "Focado")}",
+            $"Texto e estado do perk específico {purchaseIndex + 1} confirmados em duas de três capturas.");
+    }
+
+    private async Task<double> ConfirmFinalWheelspinPerkAsync(
         AutomationContext context,
         bool purchased,
         double? baselineMagentaRatio,
@@ -1948,12 +2056,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 (bitmap, document) =>
                 {
                     var normalized = GameVisionService.Normalize(document.Text);
-                    if (!IsFinalWheelspinPerkText(normalized))
+                    if (!IsFinalPerkText(normalized))
                     {
                         return new FinalPerkObservation(false, 0);
                     }
 
-                    var magentaRatio = MagentaFillRatio(bitmap, FinalPerkRegion);
+                    var magentaRatio = MagentaFillRatio(bitmap, _profile.FinalPerkRegion);
                     var valid = purchased
                         ? baselineMagentaRatio is { } baseline && magentaRatio >= baseline + 0.004
                         : normalized.Contains("SELECIONAR", StringComparison.Ordinal);
@@ -1986,7 +2094,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         var medianRatio = observedRatios[observedRatios.Count / 2];
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
                 purchased
                     ? $"Nó Wheelspin/Supersorteio e aumento rosa confirmados em duas de três capturas ({baselineMagentaRatio:P2} -> {medianRatio:P2})."
@@ -1994,18 +2102,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return medianRatio;
     }
 
-    private static bool IsMadMikeText(string normalized) =>
-        IsMadMikeTitle(normalized);
+    private bool IsTargetVehicleText(string normalized) =>
+        _profile.MatchesCurrentVehicleText(normalized);
 
-    private static bool IsFinalWheelspinPerkText(string normalized)
-    {
-        var compact = CompactText(normalized);
-        return compact.Contains("WHEELSPIN", StringComparison.Ordinal) ||
-               compact.Contains("MAGODAROLETA", StringComparison.Ordinal) &&
-               compact.Contains("SUPERSORTEIO", StringComparison.Ordinal);
-    }
+    private bool IsFinalPerkText(string normalized) =>
+        _profile.MatchesFinalPerkText(normalized);
 
-    private static async Task OpenMyCarsAsync(
+    private async Task OpenMyCarsAsync(
         AutomationContext context,
         GameNavigator navigator,
         string state,
@@ -2017,13 +2120,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             await navigator.OpenCarsTabAsync(cancellationToken);
         }
 
-        context.Logger.State(Workflow, $"MeusCarros{state}", "Normalizando no topo e abrindo Meus Carros.");
+        context.Logger.State(_profile.Workflow, $"MeusCarros{state}", "Normalizando no topo e abrindo Meus Carros.");
         await TapRepeatedAsync(context, GameKey.Up, 8, cancellationToken);
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await WaitForCarGridAsync(context, $"MeusCarros{state}Confirmado", cancellationToken);
     }
 
-    private static async Task SelectManufacturerAsync(
+    private async Task SelectManufacturerAsync(
         AutomationContext context,
         string state,
         string manufacturer,
@@ -2064,7 +2167,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
             $"{manufacturer} localizado; movendo {Math.Abs(verticalMoves)} linha(s) e " +
             $"{Math.Abs(horizontalMoves)} coluna(s) somente com o controle.");
@@ -2205,7 +2308,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                         _ => 20
                     };
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         $"{state}Ajuste",
                         $"O pulso preciso de {previousPulse.HoldMs} ms não moveu o foco; " +
                         $"nova tentativa limitada com {nextCorrectiveHoldMs} ms.");
@@ -2237,7 +2340,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
 
                         nextCorrectiveHoldMs = 8;
                         context.Logger.State(
-                            Workflow,
+                            _profile.Workflow,
                             $"{state}Ajuste",
                             $"O pulso de {previousPulse.HoldMs} ms saltou duas células; " +
                             "a reversão será tentada uma vez com 8 ms precisos.");
@@ -2282,7 +2385,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             };
             var stableFocus = stableCorrection.Focus;
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 $"{state}Ajuste",
                 $"Foco em ({stableFocus.Center.X},{stableFocus.Center.Y}), razão={stableFocus.FocusRatio:P1}; " +
                 $"residual=({stableCorrection.Moves.Vertical},{stableCorrection.Moves.Horizontal}). " +
@@ -2324,20 +2427,20 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         if (await context.Vision.ContainsAnyTextAsync(successorTexts, cancellationToken))
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 $"{state}Confirmado",
                 $"Alvo visível após selecionar {manufacturer}; iniciando confirmação do cartão.");
         }
         else
         {
             context.Logger.State(
-                Workflow,
+                _profile.Workflow,
                 $"{state}BuscaNoGrid",
                 $"{manufacturer} foi selecionado, mas o alvo não está no viewport inicial; iniciando busca limitada.");
         }
     }
 
-    private static async Task WaitForManufacturerOverlayAsync(
+    private async Task WaitForManufacturerOverlayAsync(
         AutomationContext context,
         string state,
         CancellationToken cancellationToken)
@@ -2349,7 +2452,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             if (snapshot.IsOverlay && snapshot.Focused is not null)
             {
                 context.Logger.State(
-                    Workflow,
+                    _profile.Workflow,
                     state,
                     $"Overlay Fabricante confirmado por título exato, {snapshot.CellCount} células OCR e foco verde.");
                 return;
@@ -2364,7 +2467,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "Backspace não abriu uma grade de fabricantes confirmada; nenhum direcional será enviado.");
     }
 
-    private static async Task<ManufacturerOverlaySnapshot> CaptureManufacturerOverlayAsync(
+    private async Task<ManufacturerOverlaySnapshot> CaptureManufacturerOverlayAsync(
         AutomationContext context,
         string? manufacturer,
         CancellationToken cancellationToken) =>
@@ -2372,7 +2475,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             (bitmap, document) => AnalyzeManufacturerOverlay(bitmap, document, manufacturer),
             cancellationToken);
 
-    private static ManufacturerOverlaySnapshot AnalyzeManufacturerOverlay(
+    private ManufacturerOverlaySnapshot AnalyzeManufacturerOverlay(
         Bitmap bitmap,
         OcrDocument document,
         string? manufacturer)
@@ -2538,7 +2641,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             columnSpacing);
     }
 
-    private static async Task WaitForCarGridAsync(
+    private async Task WaitForCarGridAsync(
         AutomationContext context,
         string state,
         CancellationToken cancellationToken)
@@ -2547,14 +2650,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         var confirmations = 0;
         while (DateTime.UtcNow < deadline)
         {
-            var snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             confirmations = snapshot.IsCarGrid && snapshot.FocusedCell >= 0
                 ? confirmations + 1
                 : 0;
             if (confirmations >= 2)
             {
                 context.Logger.State(
-                    Workflow,
+                    _profile.Workflow,
                     state,
                     "Grade de carros confirmada em duas capturas por estrutura e contorno verde.");
                 return;
@@ -2569,44 +2672,44 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "A grade de carros não foi confirmada em duas capturas consecutivas.");
     }
 
-    private static async Task<bool> FocusMadMikeCardAsync(
+    private async Task<bool> FocusTargetVehicleCardAsync(
         AutomationContext context,
         string state,
         CancellationToken cancellationToken,
         bool allowAbsent = false)
     {
         var stalledMoves = 0;
-        // Este modo só é usado imediatamente após MAZDA ter sido selecionada
+        // Este modo só é usado imediatamente após a fabricante-alvo ter sido selecionada
         // e confirmada no overlay. A barra de carros é alfabética; alcançar
         // explicitamente uma fabricante posterior sem encontrar o alvo prova
-        // que a seção Mazda terminou, sem depender de um D-pad ignorado no fim.
-        var startedAtMazda = allowAbsent;
+        // que a seção-alvo terminou, sem depender de um D-pad ignorado no fim.
+        var startedAtTargetManufacturer = allowAbsent;
         for (var move = 0; move <= MaximumCardSearchMoves; move++)
         {
-            var snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             if (!snapshot.IsCarGrid || snapshot.FocusedCell < 0)
             {
                 throw await CreateFailureAsync(
                     context,
                     state,
-                    "A grade ou o cartão focado ficou inconclusivo durante a busca do Mad Mike.");
+                    "A grade ou o cartão focado ficou inconclusivo durante a busca do veículo-alvo.");
             }
 
             if (snapshot.CandidateCells.Contains(snapshot.FocusedCell))
             {
-                if (await ConfirmFocusedMadMikeAsync(context, cancellationToken))
+                if (await ConfirmFocusedTargetVehicleAsync(context, cancellationToken))
                 {
                     context.Logger.State(
-                        Workflow,
+                        _profile.Workflow,
                         state,
-                        $"Mad Mike confirmado por OCR e contorno verde na célula {snapshot.FocusedCell + 1}.");
+                        $"veículo-alvo confirmado por OCR e contorno verde na célula {snapshot.FocusedCell + 1}.");
                     return true;
                 }
 
                 throw await CreateFailureAsync(
                     context,
                     state,
-                    "O candidato Mad Mike não permaneceu focado em duas de três capturas.");
+                    "O candidato veículo-alvo não permaneceu focado em duas de três capturas.");
             }
 
             if (snapshot.CandidateCells.Count > 0)
@@ -2637,15 +2740,15 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             }
 
             var focusedManufacturer = RecognizeFocusedManufacturer(snapshot.FocusedCardText);
-            if (focusedManufacturer == "MAZDA")
+            if (focusedManufacturer == _profile.Manufacturer)
             {
-                startedAtMazda = true;
+                startedAtTargetManufacturer = true;
             }
             else if (allowAbsent &&
-                     startedAtMazda &&
+                     startedAtTargetManufacturer &&
                      focusedManufacturer is not null)
             {
-                await ConfirmMadMikeAbsentAfterManufacturerTransitionAsync(
+                await ConfirmTargetVehicleAbsentAfterManufacturerTransitionAsync(
                     context,
                     state,
                     focusedManufacturer,
@@ -2660,7 +2763,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 cancellationToken,
                 postDelayMs: FastNavigationPostDelayMs);
             await Task.Delay(160, cancellationToken);
-            var after = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var after = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             stalledMoves = after.ContentFingerprint == beforeFingerprint && after.FocusedCell == beforeFocus
                 ? stalledMoves + 1
                 : 0;
@@ -2673,10 +2776,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         throw await CreateFailureAsync(
             context,
             state,
-            "A busca limitada percorreu a grade Mazda sem confirmar um cartão Mad Mike por OCR e CV.");
+            "A busca limitada percorreu a grade da fabricante-alvo sem confirmar um cartão veículo-alvo por OCR e CV.");
     }
 
-    private static async Task ConfirmMadMikeAbsentAfterManufacturerTransitionAsync(
+    private async Task ConfirmTargetVehicleAbsentAfterManufacturerTransitionAsync(
         AutomationContext context,
         string state,
         string expectedManufacturer,
@@ -2687,13 +2790,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         var inconclusive = 0;
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            var snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             var manufacturer = RecognizeFocusedManufacturer(snapshot.FocusedCardText);
             if (!snapshot.IsCarGrid || snapshot.FocusedCell < 0 || manufacturer is null)
             {
                 inconclusive++;
             }
-            else if (snapshot.CandidateCells.Count > 0 || manufacturer == "MAZDA")
+            else if (snapshot.CandidateCells.Count > 0 || manufacturer == _profile.Manufacturer)
             {
                 conflicts++;
             }
@@ -2716,41 +2819,29 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             throw await CreateFailureAsync(
                 context,
                 state + "AusenciaInconclusiva",
-                $"A busca alcançou {expectedManufacturer} após Mazda, mas a transição sem Mad Mike não permaneceu " +
+                $"A busca alcançou {expectedManufacturer} após a fabricante-alvo, mas a transição sem veículo-alvo não permaneceu " +
                 $"estável em duas de três capturas sem conflito (válidas={stableObservations.Count}, " +
                 $"conflitos={conflicts}, inconclusivas={inconclusive}).");
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state + "Ausente",
-            $"Transição de Mazda para {expectedManufacturer} e ausência do cartão Mad Mike " +
+            $"Transição da fabricante-alvo para {expectedManufacturer} e ausência do cartão veículo-alvo " +
             "confirmadas na mesma célula em duas de três capturas.");
     }
 
-    private static string? RecognizeFocusedManufacturer(string focusedCardText)
-    {
-        var normalized = GameVisionService.Normalize(focusedCardText);
-        if (Regex.IsMatch(normalized, @"\bMAZDA\b", RegexOptions.CultureInvariant))
-        {
-            return "MAZDA";
-        }
+    private string? RecognizeFocusedManufacturer(string focusedCardText) =>
+        _profile.RecognizeFocusedManufacturer(focusedCardText);
 
-        return PostMazdaManufacturerTokens.FirstOrDefault(manufacturer =>
-            Regex.IsMatch(
-                normalized,
-                $@"\b{Regex.Escape(manufacturer).Replace("\\ ", @"\s+")}\b",
-                RegexOptions.CultureInvariant));
-    }
-
-    private static async Task<bool> ConfirmFocusedMadMikeAsync(
+    private async Task<bool> ConfirmFocusedTargetVehicleAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
         var confirmations = 0;
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            var snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             if (snapshot.IsCarGrid &&
                 snapshot.FocusedCell >= 0 &&
                 snapshot.CandidateCells.Contains(snapshot.FocusedCell))
@@ -2767,11 +2858,11 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return confirmations >= 2;
     }
 
-    private static async Task MoveFocusAwayFromMadMikeAsync(
+    private async Task MoveFocusAwayFromTargetVehicleAsync(
         AutomationContext context,
         CancellationToken cancellationToken)
     {
-        var snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+        var snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
         if (!snapshot.IsCarGrid ||
             snapshot.FocusedCell < 0 ||
             !snapshot.CandidateCells.Contains(snapshot.FocusedCell))
@@ -2779,7 +2870,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             throw await CreateFailureAsync(
                 context,
                 "TrocarCarro",
-                "O Mad Mike atual não foi confirmado simultaneamente no cabeçalho e no cartão focado.");
+                "O veículo-alvo atual não foi confirmado simultaneamente no cabeçalho e no cartão focado.");
         }
 
         for (var attempt = 1; attempt <= 8; attempt++)
@@ -2790,7 +2881,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 cancellationToken,
                 postDelayMs: FastNavigationPostDelayMs);
             await Task.Delay(150, cancellationToken);
-            snapshot = await CaptureMadMikeGridAsync(context, cancellationToken);
+            snapshot = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             if (!snapshot.IsCarGrid || snapshot.FocusedCell < 0)
             {
                 continue;
@@ -2804,15 +2895,15 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             }
 
             await Task.Delay(180, cancellationToken);
-            var confirmation = await CaptureMadMikeGridAsync(context, cancellationToken);
+            var confirmation = await CaptureTargetVehicleGridAsync(context, cancellationToken);
             if (confirmation.IsCarGrid &&
                 confirmation.FocusedCell == snapshot.FocusedCell &&
                 !confirmation.CandidateCells.Contains(confirmation.FocusedCell))
             {
                 context.Logger.State(
-                    Workflow,
+                    _profile.Workflow,
                     "OutroCarro",
-                    $"Foco saiu do Mad Mike e estabilizou na célula {confirmation.FocusedCell + 1}.");
+                    $"Foco saiu do veículo-alvo e estabilizou na célula {confirmation.FocusedCell + 1}.");
                 return;
             }
         }
@@ -2820,18 +2911,18 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         throw await CreateFailureAsync(
             context,
             "OutroCarro",
-            "Não foi possível estabilizar o foco em um cartão diferente do Mad Mike.");
+            "Não foi possível estabilizar o foco em um cartão diferente do veículo-alvo.");
     }
 
-    private static async Task ConfirmCurrentCarIsNotMadMikeAsync(
+    private async Task ConfirmCurrentCarIsNotTargetVehicleAsync(
         AutomationContext context,
         string state,
         CancellationToken cancellationToken) =>
-        await ConfirmCurrentCarHeaderAsync(context, expectMadMike: false, state, cancellationToken);
+        await ConfirmCurrentCarHeaderAsync(context, expectTargetVehicle: false, state, cancellationToken);
 
-    private static async Task ConfirmCurrentCarHeaderAsync(
+    private async Task ConfirmCurrentCarHeaderAsync(
         AutomationContext context,
-        bool expectMadMike,
+        bool expectTargetVehicle,
         string state,
         CancellationToken cancellationToken)
     {
@@ -2847,8 +2938,12 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             var normalized = GameVisionService.Normalize(header.Text);
             observations.Add(normalized);
             var recognizable = LooksLikeCarHeader(normalized);
-            var isMadMike = IsMadMikeTitle(normalized);
-            if (recognizable && isMadMike == expectMadMike)
+            var hasAnyTargetVehicleEvidence = _profile.MatchesAnyTargetVehicleEvidence(normalized);
+            var hasFullTargetVehicleIdentity = IsTargetVehicleText(normalized);
+            var observationMatches = expectTargetVehicle
+                ? hasFullTargetVehicleIdentity
+                : !hasAnyTargetVehicleEvidence;
+            if (recognizable && observationMatches)
             {
                 matching++;
             }
@@ -2868,25 +2963,25 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             throw await CreateFailureAsync(
                 context,
                 state,
-                expectMadMike
-                    ? $"O cabeçalho não confirmou o Mad Mike atual em duas capturas. OCR: '{Shorten(string.Join(" | ", observations))}'."
-                    : $"O cabeçalho não confirmou um carro diferente do Mad Mike em duas capturas sem conflito. OCR: '{Shorten(string.Join(" | ", observations))}'.");
+                expectTargetVehicle
+                    ? $"O cabeçalho não confirmou o veículo-alvo atual em duas capturas. OCR: '{Shorten(string.Join(" | ", observations))}'."
+                    : $"O cabeçalho não confirmou um carro diferente do veículo-alvo em duas capturas sem conflito. OCR: '{Shorten(string.Join(" | ", observations))}'.");
         }
 
         context.Logger.State(
-            Workflow,
+            _profile.Workflow,
             state,
-            expectMadMike
-                ? "Mad Mike confirmado no cabeçalho atual em duas de três capturas."
-                : "Outro carro confirmado no cabeçalho atual em duas de três capturas; a remoção do Mad Mike é segura.");
+            expectTargetVehicle
+                ? "veículo-alvo confirmado no cabeçalho atual em duas de três capturas."
+                : "Outro carro confirmado no cabeçalho atual em duas de três capturas; a remoção do veículo-alvo é segura.");
     }
 
-    private static async Task<MadMikeGridSnapshot> CaptureMadMikeGridAsync(
+    private async Task<TargetVehicleGridSnapshot> CaptureTargetVehicleGridAsync(
         AutomationContext context,
         CancellationToken cancellationToken) =>
-        await context.Vision.AnalyzeScreenAsync(AnalyzeMadMikeGrid, cancellationToken);
+        await context.Vision.AnalyzeScreenAsync(AnalyzeTargetVehicleGrid, cancellationToken);
 
-    private static MadMikeGridSnapshot AnalyzeMadMikeGrid(Bitmap bitmap, OcrDocument document)
+    private TargetVehicleGridSnapshot AnalyzeTargetVehicleGrid(Bitmap bitmap, OcrDocument document)
     {
         var normalized = GameVisionService.Normalize(document.Text);
         var compact = CompactText(normalized);
@@ -2925,7 +3020,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                          selectedCell >= 0 &&
                          gridLines.Length >= 3;
         var candidates = gridLines
-            .Where(line => IsMadMikeTitle(line.Text))
+            .Where(line => IsTargetVehicleTitle(line.Text))
             .Select(line => FindClosestCarCellIndex(CardRegionFromTitle(bitmap, line)))
             .Where(index => index >= 0)
             .Distinct()
@@ -2946,10 +3041,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 .ThenBy(line => line.Center.X)
                 .Select(line =>
                     $"{GameVisionService.Normalize(line.Text)}@{line.Center.X / 20}:{line.Center.Y / 20}"));
-        return new MadMikeGridSnapshot(isCarGrid, selectedCell, candidates, focusedCardText, fingerprint);
+        return new TargetVehicleGridSnapshot(isCarGrid, selectedCell, candidates, focusedCardText, fingerprint);
     }
 
-    private static bool IsInsideNormalizedRegion(Bitmap bitmap, Point point, RectangleF region)
+    private bool IsInsideNormalizedRegion(Bitmap bitmap, Point point, RectangleF region)
     {
         var normalizedX = point.X / (double)bitmap.Width;
         var normalizedY = point.Y / (double)bitmap.Height;
@@ -2959,21 +3054,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                normalizedY <= region.Bottom;
     }
 
-    private static bool IsMadMikeTitle(string text)
-    {
-        var compact = Regex.Replace(
-            GameVisionService.Normalize(text),
-            @"[^A-Z0-9]",
-            string.Empty,
-            RegexOptions.CultureInvariant);
-        // O Windows OCR leu o I estreito de MIKE como L em três capturas
-        // consecutivas do cabeçalho real ("MAD MLKE"). Aceitamos somente essa
-        // confusão observada, mantendo o restante do nome compacto obrigatório.
-        return compact.Contains("MADMIKE", StringComparison.Ordinal) ||
-               compact.Contains("MADMLKE", StringComparison.Ordinal);
-    }
+    private bool IsTargetVehicleTitle(string text) =>
+        _profile.MatchesVehicleText(text);
 
-    private static bool LooksLikeCarHeader(string normalized)
+    private bool LooksLikeCarHeader(string normalized)
     {
         if (Regex.IsMatch(normalized, @"\b(?:19|20)\d{2}\b", RegexOptions.CultureInvariant))
         {
@@ -3000,7 +3084,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                normalized.Count(char.IsLetter) >= 5;
     }
 
-    private static RectangleF CardRegionFromTitle(Bitmap bitmap, OcrLine title)
+    private RectangleF CardRegionFromTitle(Bitmap bitmap, OcrLine title)
     {
         const float width = 0.174f;
         const float height = 0.225f;
@@ -3013,7 +3097,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             height);
     }
 
-    private static int FindClosestCarCellIndex(RectangleF candidateRegion)
+    private int FindClosestCarCellIndex(RectangleF candidateRegion)
     {
         var centerX = candidateRegion.X + candidateRegion.Width / 2;
         var centerY = candidateRegion.Y + candidateRegion.Height / 2;
@@ -3029,10 +3113,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return closest.Distance <= 0.04 * 0.04 ? closest.Index : -1;
     }
 
-    private static RectangleF ManufacturerCellRegion(Bitmap bitmap, OcrLine line)
+    private RectangleF ManufacturerCellRegion(Bitmap bitmap, OcrLine line)
         => ManufacturerCellRegion(bitmap, line.Center);
 
-    private static RectangleF ManufacturerCellRegion(Bitmap bitmap, Point center)
+    private RectangleF ManufacturerCellRegion(Bitmap bitmap, Point center)
     {
         const float width = 0.188f;
         const float height = 0.047f;
@@ -3045,7 +3129,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             height);
     }
 
-    private static IReadOnlyList<double> ClusterCenters(IEnumerable<double> values, double tolerance)
+    private IReadOnlyList<double> ClusterCenters(IEnumerable<double> values, double tolerance)
     {
         var groups = new List<List<double>>();
         foreach (var value in values.Order())
@@ -3063,7 +3147,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return groups.Select(group => group.Average()).ToArray();
     }
 
-    private static IReadOnlyList<double> FillMissingGridCenters(
+    private IReadOnlyList<double> FillMissingGridCenters(
         IReadOnlyList<double> centers,
         double spacing)
     {
@@ -3094,7 +3178,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return completed;
     }
 
-    private static double MedianSpacing(IReadOnlyList<double> centers)
+    private double MedianSpacing(IReadOnlyList<double> centers)
     {
         var spacings = centers
             .Zip(centers.Skip(1), (left, right) => right - left)
@@ -3104,14 +3188,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return spacings.Length == 0 ? 0 : spacings[spacings.Length / 2];
     }
 
-    private static int FindClosestCenterIndex(IReadOnlyList<double> centers, double value) =>
+    private int FindClosestCenterIndex(IReadOnlyList<double> centers, double value) =>
         centers
             .Select((center, index) => new { Index = index, Distance = Math.Abs(center - value) })
             .OrderBy(item => item.Distance)
             .First()
             .Index;
 
-    private static double LimeVerticalBorderRatio(Bitmap bitmap, RectangleF normalizedRegion)
+    private double LimeVerticalBorderRatio(Bitmap bitmap, RectangleF normalizedRegion)
     {
         var region = ToPixels(bitmap, normalizedRegion);
         var border = Math.Max(3, (int)Math.Round(Math.Min(region.Width, region.Height) * 0.055));
@@ -3152,7 +3236,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             rightMatching / (double)rightSampled);
     }
 
-    private static double LimeVerticalBorderRatioWithHorizontalTolerance(
+    private double LimeVerticalBorderRatioWithHorizontalTolerance(
         Bitmap bitmap,
         RectangleF normalizedRegion,
         double horizontalToleranceRatio)
@@ -3214,7 +3298,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             BestRatioAround(region.Right - border));
     }
 
-    private static double MagentaFillRatio(Bitmap bitmap, RectangleF normalizedRegion)
+    private double MagentaFillRatio(Bitmap bitmap, RectangleF normalizedRegion)
     {
         var region = ToPixels(bitmap, normalizedRegion);
         var matching = 0;
@@ -3235,7 +3319,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return sampled == 0 ? 0 : matching / (double)sampled;
     }
 
-    private static Rectangle ToPixels(Bitmap bitmap, RectangleF normalized)
+    private Rectangle ToPixels(Bitmap bitmap, RectangleF normalized)
     {
         var x = Math.Clamp((int)Math.Round(bitmap.Width * normalized.X), 0, bitmap.Width - 1);
         var y = Math.Clamp((int)Math.Round(bitmap.Height * normalized.Y), 0, bitmap.Height - 1);
@@ -3254,7 +3338,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     0.225f)))
             .ToArray();
 
-    private static async Task TapRepeatedAsync(
+    private async Task TapRepeatedAsync(
         AutomationContext context,
         GameKey key,
         int count,
@@ -3269,7 +3353,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static async Task TapRepeatedWithDelayAsync(
+    private async Task TapRepeatedWithDelayAsync(
         AutomationContext context,
         GameKey key,
         int count,
@@ -3285,7 +3369,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static SpRefillIntent? LoadSpRefillIntent(
+    private SpRefillIntent? LoadSpRefillIntent(
         AutomationContext context,
         int liveSkillPoints)
     {
@@ -3312,7 +3396,15 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         var age = DateTimeOffset.UtcNow - intent.CreatedAtUtc;
-        if (intent.Version != SpRefillIntentVersion ||
+        var isCurrentProfileIntent = intent.Version == SpRefillIntentVersion &&
+                                     string.Equals(
+                                         intent.VehicleKey,
+                                         _profile.RecoveryVehicleKey,
+                                         StringComparison.Ordinal);
+        var isLegacyMadMikeIntent = intent.Version == LegacyMadMikeSpRefillIntentVersion &&
+                                    intent.VehicleKey is null &&
+                                    _profile.Kind == MacroKind.FarmarWheelspins;
+        if ((!isCurrentProfileIntent && !isLegacyMadMikeIntent) ||
             intent.TargetSkillPoints != SpRefillTarget ||
             intent.Attempts is < 0 or > MaximumSpRefillAttempts ||
             intent.SkillPointsAtStart < 0 ||
@@ -3331,12 +3423,13 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return intent;
     }
 
-    private static SpRefillIntent CreateSpRefillIntent(
+    private SpRefillIntent CreateSpRefillIntent(
         AutomationContext context,
         int skillPointsAtStart)
     {
         var intent = new SpRefillIntent(
             SpRefillIntentVersion,
+            _profile.RecoveryVehicleKey,
             SpRefillTarget,
             skillPointsAtStart,
             Attempts: 0,
@@ -3346,7 +3439,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return intent;
     }
 
-    private static void SaveSpRefillIntent(
+    private void SaveSpRefillIntent(
         AutomationContext context,
         SpRefillIntent intent,
         bool overwrite)
@@ -3379,7 +3472,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static void ClearSpRefillIntent(AutomationContext context)
+    private void ClearSpRefillIntent(AutomationContext context)
     {
         var path = SpRefillIntentPath(context);
         try
@@ -3397,10 +3490,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static string SpRefillIntentPath(AutomationContext context) =>
+    private string SpRefillIntentPath(AutomationContext context) =>
         Path.Combine(context.Settings.DataDirectory, SpRefillIntentFileName);
 
-    private static SpinRecoveryCheckpoint? LoadRecoveryCheckpoint(AutomationContext context)
+    private SpinRecoveryCheckpoint? LoadRecoveryCheckpoint(AutomationContext context)
     {
         var path = RecoveryCheckpointPath(context);
         if (!File.Exists(path))
@@ -3425,15 +3518,28 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
 
         var age = DateTimeOffset.UtcNow - checkpoint.ConfirmedAtUtc;
-        if (checkpoint.Version != RecoveryCheckpointVersion ||
+        var isSafeLegacyPurchaseCheckpoint = checkpoint.Version == 2 &&
+                                             checkpoint.Stage is
+                                                 (SpinRecoveryStage.PurchaseAuthorized or
+                                                  SpinRecoveryStage.PurchaseConfirmed) &&
+                                             checkpoint.SkillPointsAfterFinal is null;
+        if (checkpoint.Version == 2 && checkpoint.Stage == SpinRecoveryStage.FinalPerkConfirmed)
+        {
+            throw new CalibrationRequiredException(
+                "O checkpoint legado chegou ao perk final, mas pode representar uma remoção já enviada pela versão anterior. " +
+                "O BOT não tentará remover outro carro. Revise a garagem, resolva manualmente o carro deste ciclo e só então " +
+                $"exclua o checkpoint: {path}");
+        }
+
+        if ((checkpoint.Version != RecoveryCheckpointVersion && !isSafeLegacyPurchaseCheckpoint) ||
             checkpoint.CycleId == Guid.Empty ||
-            !string.Equals(checkpoint.VehicleKey, RecoveryVehicleKey, StringComparison.Ordinal) ||
+            !string.Equals(checkpoint.VehicleKey, _profile.RecoveryVehicleKey, StringComparison.Ordinal) ||
             checkpoint.Stage == SpinRecoveryStage.Unknown ||
             !Enum.IsDefined(checkpoint.Stage) ||
             checkpoint.SkillPointsBeforeMastery is < 0 or > 999 ||
-            checkpoint.CreditsBeforePurchase < context.Settings.Spins.CreditsPerCar ||
+            checkpoint.CreditsBeforePurchase < _profile.GetSettings(context.Settings).CreditsPerCar ||
             checkpoint.CreditsAfterPurchase !=
-                checkpoint.CreditsBeforePurchase - context.Settings.Spins.CreditsPerCar ||
+                checkpoint.CreditsBeforePurchase - _profile.GetSettings(context.Settings).CreditsPerCar ||
             age < TimeSpan.FromMinutes(-5) ||
             age > TimeSpan.FromHours(24))
         {
@@ -3441,11 +3547,14 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 "O checkpoint WheelSpin está incompatível ou expirado. Nenhum carro será removido.");
         }
 
-        var finalStageValid = checkpoint.Stage == SpinRecoveryStage.FinalPerkConfirmed &&
+        var finalStageValid = checkpoint.Stage is
+                                  (SpinRecoveryStage.FinalPerkConfirmed or
+                                   SpinRecoveryStage.RemovalAuthorized or
+                                   SpinRecoveryStage.RemovalConfirmed) &&
                               checkpoint.SkillPointsAfterFinal is { } finalPoints &&
                               finalPoints is >= 0 and <= 999 &&
                               checkpoint.SkillPointsBeforeMastery - finalPoints ==
-                              context.Settings.Spins.SkillPointsPerCar;
+                              _profile.GetSettings(context.Settings).SkillPointsPerCar;
         var purchaseStageValid = checkpoint.Stage is
                                      (SpinRecoveryStage.PurchaseAuthorized or SpinRecoveryStage.PurchaseConfirmed) &&
                                  checkpoint.SkillPointsAfterFinal is null;
@@ -3456,17 +3565,27 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 "Nenhum SP será gasto e nenhum carro será removido.");
         }
 
+        if (isSafeLegacyPurchaseCheckpoint)
+        {
+            checkpoint = checkpoint with { Version = RecoveryCheckpointVersion };
+            SaveRecoveryCheckpoint(context, checkpoint);
+            context.Logger.State(
+                _profile.Workflow,
+                "MigrarCheckpointCompra",
+                "Checkpoint legado anterior ao gasto de Maestria foi validado e migrado para a versão atual.");
+        }
+
         return checkpoint;
     }
 
-    private static void SavePurchaseAuthorizationCheckpoint(AutomationContext context)
+    private void SavePurchaseAuthorizationCheckpoint(AutomationContext context)
     {
         var snapshot = context.Resources.Current;
         if (snapshot.SkillPoints is not { } skillPoints ||
             snapshot.SkillPointsEstimated ||
             snapshot.Credits is not { } credits ||
             snapshot.CreditsEstimated ||
-            credits < context.Settings.Spins.CreditsPerCar)
+            credits < _profile.GetSettings(context.Settings).CreditsPerCar)
         {
             throw new CalibrationRequiredException(
                 "A compra foi validada visualmente, mas os saldos exatos do ciclo não estão disponíveis para criar " +
@@ -3491,16 +3610,16 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             new SpinRecoveryCheckpoint(
                 RecoveryCheckpointVersion,
                 Guid.NewGuid(),
-                RecoveryVehicleKey,
+                _profile.RecoveryVehicleKey,
                 SpinRecoveryStage.PurchaseAuthorized,
                 skillPoints,
                 SkillPointsAfterFinal: null,
                 CreditsBeforePurchase: credits,
-                CreditsAfterPurchase: credits - context.Settings.Spins.CreditsPerCar,
+                CreditsAfterPurchase: credits - _profile.GetSettings(context.Settings).CreditsPerCar,
                 ConfirmedAtUtc: DateTimeOffset.UtcNow));
     }
 
-    private static void PromotePurchaseCheckpoint(AutomationContext context)
+    private void PromotePurchaseCheckpoint(AutomationContext context)
     {
         var checkpoint = LoadRecoveryCheckpoint(context)
                          ?? throw new CalibrationRequiredException(
@@ -3522,7 +3641,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             });
     }
 
-    private static void PromoteFinalPerkCheckpoint(AutomationContext context, int skillPointsAfterFinal)
+    private void PromoteFinalPerkCheckpoint(AutomationContext context, int skillPointsAfterFinal)
     {
         var checkpoint = LoadRecoveryCheckpoint(context)
                          ?? throw new CalibrationRequiredException(
@@ -3548,7 +3667,51 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             });
     }
 
-    private static void SaveRecoveryCheckpoint(
+    private void PromoteRemovalAuthorizedCheckpoint(AutomationContext context)
+    {
+        var checkpoint = LoadRecoveryCheckpoint(context)
+                         ?? throw new CalibrationRequiredException(
+                             "A opção Sim foi confirmada, mas o checkpoint deste ciclo desapareceu. " +
+                             "Nenhuma remoção será enviada.");
+        if (checkpoint.Stage != SpinRecoveryStage.FinalPerkConfirmed)
+        {
+            throw new CalibrationRequiredException(
+                $"A opção Sim foi confirmada com checkpoint no estágio inesperado {checkpoint.Stage}. " +
+                "Nenhuma remoção será enviada.");
+        }
+
+        SaveRecoveryCheckpoint(
+            context,
+            checkpoint with
+            {
+                Stage = SpinRecoveryStage.RemovalAuthorized,
+                ConfirmedAtUtc = DateTimeOffset.UtcNow
+            });
+    }
+
+    private void PromoteRemovalConfirmedCheckpoint(AutomationContext context)
+    {
+        var checkpoint = LoadRecoveryCheckpoint(context)
+                         ?? throw new CalibrationRequiredException(
+                             "O modal de remoção fechou, mas o checkpoint deste ciclo desapareceu. " +
+                             "O BOT não tentará remover outro carro.");
+        if (checkpoint.Stage != SpinRecoveryStage.RemovalAuthorized)
+        {
+            throw new CalibrationRequiredException(
+                $"O modal de remoção fechou com checkpoint no estágio inesperado {checkpoint.Stage}. " +
+                "O BOT não tentará remover outro carro.");
+        }
+
+        SaveRecoveryCheckpoint(
+            context,
+            checkpoint with
+            {
+                Stage = SpinRecoveryStage.RemovalConfirmed,
+                ConfirmedAtUtc = DateTimeOffset.UtcNow
+            });
+    }
+
+    private void SaveRecoveryCheckpoint(
         AutomationContext context,
         SpinRecoveryCheckpoint checkpoint)
     {
@@ -3571,7 +3734,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static void ClearRecoveryCheckpoint(AutomationContext context)
+    private void ClearRecoveryCheckpoint(AutomationContext context)
     {
         var path = RecoveryCheckpointPath(context);
         try
@@ -3588,7 +3751,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         }
     }
 
-    private static string RecoveryCheckpointPath(AutomationContext context) =>
+    private string RecoveryCheckpointPath(AutomationContext context) =>
         Path.Combine(context.Settings.DataDirectory, RecoveryCheckpointFileName);
 
     private static JsonSerializerOptions CreateRecoveryCheckpointJsonOptions()
@@ -3602,17 +3765,17 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         return options;
     }
 
-    private static async Task<CalibrationRequiredException> CreateFailureAsync(
+    private async Task<CalibrationRequiredException> CreateFailureAsync(
         AutomationContext context,
         string state,
         string message)
     {
         using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
-        var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, Workflow, state);
+        var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, _profile.Workflow, state);
         return new CalibrationRequiredException($"{message} Diagnóstico local: {diagnostic}");
     }
 
-    private static string Shorten(string value) =>
+    private string Shorten(string value) =>
         value.Length <= 260 ? value : value[..260] + "…";
 
     private sealed record ManufacturerOverlaySnapshot(
@@ -3630,7 +3793,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         double FocusRatio,
         bool Selected);
 
-    private sealed record MadMikeGridSnapshot(
+    private sealed record TargetVehicleGridSnapshot(
         bool IsCarGrid,
         int FocusedCell,
         IReadOnlyList<int> CandidateCells,
@@ -3660,6 +3823,10 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         bool Valid,
         string Evidence);
 
+    private sealed record RemovalCompletionProbe(
+        bool Valid,
+        string Evidence);
+
     private sealed record FinalPerkObservation(
         bool Valid,
         double MagentaRatio);
@@ -3680,7 +3847,9 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
         Unknown,
         PurchaseAuthorized,
         PurchaseConfirmed,
-        FinalPerkConfirmed
+        FinalPerkConfirmed,
+        RemovalAuthorized,
+        RemovalConfirmed
     }
 
     private enum PurchaseRecoveryState
@@ -3704,6 +3873,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
 
     private sealed record SpRefillIntent(
         int Version,
+        string? VehicleKey,
         int TargetSkillPoints,
         int SkillPointsAtStart,
         int Attempts,
