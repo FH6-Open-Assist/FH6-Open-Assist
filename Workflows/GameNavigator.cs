@@ -2285,12 +2285,31 @@ public sealed class GameNavigator(AutomationContext context)
         var houseRecoveryUsed = false;
         for (var continueAttempt = 1; continueAttempt <= 2; continueAttempt++)
         {
-            if (!await HasStableSpRaceCompletionAsync(cancellationToken))
+            var completionReconfirmed = false;
+            for (var passiveAttempt = 1; passiveAttempt <= 3; passiveAttempt++)
+            {
+                completionReconfirmed = await HasStableSpRaceCompletionAsync(cancellationToken);
+                if (completionReconfirmed)
+                {
+                    break;
+                }
+
+                if (passiveAttempt < 3)
+                {
+                    context.Logger.Warn(
+                        $"A tela positiva oscilou na revalidação passiva {passiveAttempt}/3; " +
+                        "aguardando sem enviar entrada antes de tentar novamente.");
+                    await Task.Delay(350, cancellationToken);
+                }
+            }
+
+            if (!completionReconfirmed)
             {
                 throw await CreateEventHandoffFailureAsync(
                     sourceWorkflow,
                     "ConfirmarContinuarResultadoSP",
-                    "A tela positiva deixou de ser estável antes de A/Continuar; nenhuma entrada foi enviada.");
+                    "A tela positiva não recuperou a estabilidade após três revalidações passivas antes de " +
+                    "A/Continuar; nenhuma entrada foi enviada.");
             }
 
             context.Logger.State(
