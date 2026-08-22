@@ -493,6 +493,7 @@ def export_onnx(model: nn.Module, output_path: Path) -> None:
         dynamo=True,
         external_data=False,
         optimize=True,
+        verbose=False,
     )
     checked = onnx.load(output_path)
     onnx.checker.check_model(checked, full_check=True)
