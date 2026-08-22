@@ -31,8 +31,6 @@ public sealed class GameNavigator(AutomationContext context)
     private const double WelcomeContinueOutlineRatio = 0.80;
     private const double StreetSettingsLightSurfaceRatio = 0.70;
     private const int StreetSettingsOcrScale = 3;
-    private const int DifficultyCategoryNormalizationMoves = 12;
-    private const int DifficultyCategoryNavigationDelayMilliseconds = 300;
     private const int MaximumDifficultyOptionMoves = 10;
     private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
     private static readonly RectangleF TravelYesRegion = new(0.318f, 0.508f, 0.360f, 0.064f);
@@ -831,14 +829,31 @@ public sealed class GameNavigator(AutomationContext context)
         context.Logger.State(
             Workflow,
             "NormalizarCategoriaDificuldade",
-            "Lista de categorias estável em duas leituras; normalizando o foco no topo com cadência própria do menu Configurações.");
-        for (var move = 0; move < DifficultyCategoryNormalizationMoves; move++)
+            "Lista de categorias estável em duas leituras; localizando Dificuldade pelo OCR antes de mover o foco.");
+        var categories = await context.Vision.ReadScreenAsync(cancellationToken);
+        var game = context.GameWindow.GetRequiredGameWindow();
+        var difficultyLine = FindDifficultyCategoryLine(
+            categories,
+            game.ClientBounds.Width,
+            game.ClientBounds.Height);
+        if (difficultyLine is null)
         {
-            await context.Input.TapAsync(
-                GameKey.Up,
-                cancellationToken,
-                postDelayMs: DifficultyCategoryNavigationDelayMilliseconds);
+            throw await CreateDifficultyFailureAsync(
+                "SelecionarDificuldade",
+                "A lista estava estável, mas a linha exata Dificuldade não foi localizada na coluna de categorias. " +
+                "Nenhum clique ou Enter foi enviado.");
         }
+
+        context.Logger.State(
+            Workflow,
+            "FocarCategoriaDificuldade",
+            $"Linha Dificuldade localizada em {difficultyLine.Center.X},{difficultyLine.Center.Y}; " +
+            "movendo o foco por clique dirigido e revalidando a borda verde.");
+        await context.Input.ClickClientAsync(
+            difficultyLine.Center.X,
+            difficultyLine.Center.Y,
+            cancellationToken);
+        await Task.Delay(450, cancellationToken);
 
         if (!await IsDifficultyCategoryFocusedAsync(cancellationToken))
         {
@@ -1047,16 +1062,10 @@ public sealed class GameNavigator(AutomationContext context)
     {
         var document = await context.Vision.ReadScreenAsync(cancellationToken);
         var game = context.GameWindow.GetRequiredGameWindow();
-        var line = document.Lines
-            .Where(candidate => string.Equals(
-                GameVisionService.Normalize(candidate.Text),
-                "DIFICULDADE",
-                StringComparison.Ordinal))
-            .Where(candidate =>
-                candidate.Center.X <= game.ClientBounds.Width * 0.30 &&
-                candidate.Center.Y <= game.ClientBounds.Height * 0.32)
-            .OrderByDescending(candidate => candidate.Center.Y)
-            .FirstOrDefault();
+        var line = FindDifficultyCategoryLine(
+            document,
+            game.ClientBounds.Width,
+            game.ClientBounds.Height);
         if (line is null)
         {
             return false;
@@ -1076,6 +1085,20 @@ public sealed class GameNavigator(AutomationContext context)
             minimumRatio: 0.70,
             cancellationToken);
     }
+
+    private static OcrLine? FindDifficultyCategoryLine(
+        OcrDocument document,
+        int clientWidth,
+        int clientHeight) => document.Lines
+            .Where(candidate => string.Equals(
+                GameVisionService.Normalize(candidate.Text),
+                "DIFICULDADE",
+                StringComparison.Ordinal))
+            .Where(candidate =>
+                candidate.Center.X <= clientWidth * 0.30 &&
+                candidate.Center.Y <= clientHeight * 0.32)
+            .OrderByDescending(candidate => candidate.Center.Y)
+            .FirstOrDefault();
 
     private async Task WaitForDifficultyPanelAsync(CancellationToken cancellationToken)
     {
