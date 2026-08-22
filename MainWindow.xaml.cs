@@ -111,7 +111,8 @@ public sealed partial class MainWindow : Window
         [
             new SpFarmWorkflow(),
             new FastMoneyWorkflow(),
-            new SpinFarmWorkflow(),
+            new SpinFarmWorkflow(SpinFarmProfile.MadMike),
+            new SpinFarmWorkflow(SpinFarmProfile.Revuelto),
             new SpendSpinsWorkflow()
         ];
         _coordinator = new AutomationCoordinator(workflows, context, _logger);
@@ -249,6 +250,15 @@ public sealed partial class MainWindow : Window
             WheelspinMacroImageOverlay,
             WheelspinMacroImageGlint);
 
+        _botCards[MacroKind.FarmarWheelspinsRevuelto] = new BotCardVisuals(
+            MacroKind.FarmarWheelspinsRevuelto,
+            RevueltoSpinMacro,
+            RevueltoSpinBotImageFrame,
+            RevueltoSpinMacroImageGray,
+            RevueltoSpinMacroImageColor,
+            RevueltoSpinMacroImageOverlay,
+            RevueltoSpinMacroImageGlint);
+
         _botCards[MacroKind.GastarWheelspins] = new BotCardVisuals(
             MacroKind.GastarWheelspins,
             SpendWheelspinMacro,
@@ -263,6 +273,7 @@ public sealed partial class MainWindow : Window
             SpMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/Skill_Points.png");
             CrMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/CR_Icon.png");
             WheelspinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
+            RevueltoSpinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
             SpendWheelspinMacroImageGray.Source = await CreateGrayscaleImageSourceAsync("ms-appx:///Assets/UI/WheelSpin.jpg");
         }
         catch (Exception exception)
@@ -954,7 +965,7 @@ public sealed partial class MainWindow : Window
         ViGEmStatusDot.Fill = ThemeBrush(available ? "StatusRunningBrush" : "StatusWarningBrush");
         ViGEmStatusText.Text = available
             ? "ViGEm conectado · segundo plano disponível"
-            : "ViGEm não conectado · Farm de CR indisponível; demais BOTs podem usar primeiro plano";
+            : "ViGEm não conectado · BOTs que exigem controle virtual estão indisponíveis";
     }
 
     private void UpdateInputModeControlsAvailability()

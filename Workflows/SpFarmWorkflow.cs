@@ -61,7 +61,7 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
             workflow,
             "Inicio",
             "Início na rua: o BOT confirma ou seleciona o Impreza 22B antes da corrida. " +
-            "Assistência Total permanece um pré-requisito informado, sem verificação dinâmica. " +
+            "Antes do EventLab, configura Drivatar Imbatível e a predefinição Assistência Total. " +
             (targetRaceCount is { } races
                 ? $"Meta integrada: {targetSkillPoints} SP a partir de {startingSkillPoints}; " +
                   $"até {races} corrida(s), confirmadas visualmente antes da contagem."
@@ -72,6 +72,12 @@ public sealed class SpFarmWorkflow : IMacroWorkflow
 
         var carSelector = new RequiredCarSelector(context);
         await carSelector.EnsureSelectedAsync(RequiredCarDefinition.SkillPoints, cancellationToken);
+        context.Telemetry.UpdateStage(
+            "Configurando dificuldade",
+            "Aplicando Drivatar Imbatível e Assistência Total antes do Farm de SP.");
+        await new GameNavigator(context).ConfigureDrivingDifficultyAsync(
+            DrivingAssistancePreset.FullyAssisted,
+            cancellationToken);
         await OpenEventLabChallengeWithVisionAsync(context, cancellationToken);
         await RunRaceLoopAsync(
             context,

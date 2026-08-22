@@ -8,6 +8,12 @@ namespace FH6OpenAssist.Workflows;
 
 public sealed record MasterySnapshot(int SkillPoints, bool SubaruSelected, string OcrText);
 
+internal enum DrivingAssistancePreset
+{
+    FullyAssisted,
+    NoAssists
+}
+
 public sealed class GameNavigator(AutomationContext context)
 {
     private const string Workflow = "Navegação";
@@ -23,6 +29,7 @@ public sealed class GameNavigator(AutomationContext context)
     private const double PauseTabUnderlineLimeRatio = 0.60;
     private const double TravelCardOutlineRatio = 0.78;
     private const double WelcomeContinueOutlineRatio = 0.80;
+    private const int MaximumDifficultyOptionMoves = 10;
     private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
     private static readonly RectangleF TravelYesRegion = new(0.318f, 0.508f, 0.360f, 0.064f);
     private static readonly RectangleF EventExitCardFocusRegion = new(0.72f, 0.232f, 0.16f, 0.018f);
@@ -59,6 +66,14 @@ public sealed class GameNavigator(AutomationContext context)
         "QUER MESMO SAIR DO MODO FOTO",
         "QUER SAIR DO MODO FOTO"
     ];
+    private static readonly string[] FullyAssistedPresetAliases = ["ASSISTENCIA TOTAL"];
+    private static readonly string[] NoAssistsPresetAliases =
+    [
+        "EXTREMO",
+        "SEM ASSISTENCIA",
+        "SEM ASSISTENCIAS"
+    ];
+    private static readonly string[] UnbeatableDrivatarAliases = ["IMBATIVEL"];
     private static readonly PauseTabDefinition[] PauseTabs =
     [
         new("CAMPANHA", new RectangleF(0.238f, 0.178f, 0.093f, 0.052f)),
@@ -714,65 +729,340 @@ public sealed class GameNavigator(AutomationContext context)
         await WaitForGarageConfirmedAsync(cancellationToken);
     }
 
-    public async Task OpenDifficultyAsync(CancellationToken cancellationToken)
+    internal async Task ConfigureDrivingDifficultyAsync(
+        DrivingAssistancePreset assistancePreset,
+        CancellationToken cancellationToken)
     {
-        await EnsureGarageAsync(cancellationToken);
-        await ReturnToGarageMenuAsync(cancellationToken);
-        await OpenGarageTabAsync(
-            "AbaCampanha",
-            "CAMPANHA",
-            // "Dirigir" também existe no rodapé de todas as abas. O Diário
-            // é exclusivo da Campanha e evita validar a aba Carros por engano.
-            ["DIÁRIO DE COLEÇÃO", "DIARIO DE COLECAO"],
+        var (assistanceLabel, assistanceAliases, assistanceDirection) = assistancePreset switch
+        {
+            DrivingAssistancePreset.FullyAssisted => (
+                "Assistência Total",
+                FullyAssistedPresetAliases,
+                GameKey.Left),
+            DrivingAssistancePreset.NoAssists => (
+                "Extremo (sem assistências)",
+                NoAssistsPresetAliases,
+                GameKey.Right),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(assistancePreset),
+                assistancePreset,
+                "Predefinição de assistência inválida.")
+        };
+
+        await OpenDifficultyFromStreetMenuAsync(cancellationToken);
+        await SetDifficultyOptionAsync(
+            "Predefinição de Assistência de Pilotagem",
+            assistanceLabel,
+            assistanceAliases,
+            assistanceDirection,
+            maximumSteps: 8,
             cancellationToken);
+        await SetDifficultyOptionAsync(
+            "Dificuldade do Drivatar",
+            "Imbatível",
+            UnbeatableDrivatarAliases,
+            GameKey.Right,
+            MaximumDifficultyOptionMoves,
+            cancellationToken);
+        await ConfirmDifficultyConfigurationAsync(
+            assistanceLabel,
+            assistanceAliases,
+            cancellationToken);
+        await SaveDifficultyAndReturnAsync(cancellationToken);
+    }
+
+    private async Task OpenDifficultyFromStreetMenuAsync(CancellationToken cancellationToken)
+    {
+        var initial = await context.GameContext.DetectAsync(cancellationToken);
+        if (initial.Kind != GameContextKind.StreetMenu)
+        {
+            throw await CreateDifficultyFailureAsync(
+                "PrepararConfiguracoes",
+                $"A configuração automática exige o menu de pausa da rua; o contexto observado foi {initial.Kind}. " +
+                "Nenhuma navegação de configuração foi enviada.");
+        }
+
+        await ResetCampaignPauseFocusAsync(cancellationToken);
+        var settingsRegion = await FindStreetSettingsCardRegionAsync(cancellationToken)
+                             ?? throw await CreateDifficultyFailureAsync(
+                                 "LocalizarConfiguracoes",
+                                 "O cartão Configurações não foi localizado no menu Campanha da rua.");
+
+        var settingsFocused = await HasStableLimeHorizontalOutlineAsync(
+            settingsRegion,
+            minimumRatio: 0.65,
+            cancellationToken);
+        if (!settingsFocused)
+        {
+            context.Logger.State(
+                Workflow,
+                "FocarConfiguracoes",
+                "Foco da aba Campanha normalizado; descendo ao cartão central e avançando até Configurações.");
+            await context.Input.TapAsync(GameKey.Down, cancellationToken);
+            await context.Input.TapAsync(GameKey.Right, cancellationToken);
+            settingsFocused = await HasStableLimeHorizontalOutlineAsync(
+                settingsRegion,
+                minimumRatio: 0.65,
+                cancellationToken);
+        }
+
+        if (!settingsFocused)
+        {
+            context.Logger.State(
+                Workflow,
+                "CorrigirFocoConfiguracoes",
+                "Configurações ainda não ficou focado; tentando uma única correção vertical para cima.");
+            await context.Input.TapAsync(GameKey.Up, cancellationToken);
+            settingsFocused = await HasStableLimeHorizontalOutlineAsync(
+                settingsRegion,
+                minimumRatio: 0.65,
+                cancellationToken);
+        }
+
+        if (!settingsFocused)
+        {
+            throw await CreateDifficultyFailureAsync(
+                "FocarConfiguracoes",
+                "A borda verde do cartão Configurações não foi confirmada em duas de três capturas. " +
+                "Nenhum Enter foi enviado.");
+        }
 
         context.Logger.State(
             Workflow,
             "AbrirConfiguracoes",
-            "Normalizando o menu Campanha no topo e abrindo Configurações.");
-        for (var step = 0; step < 5; step++)
-        {
-            await context.Input.TapAsync(GameKey.Up, cancellationToken);
-        }
-        for (var step = 0; step < 3; step++)
-        {
-            await context.Input.TapAsync(GameKey.Down, cancellationToken);
-        }
+            "Cartão Configurações confirmado por texto e borda verde; abrindo com A.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
             Workflow,
             "AbrirConfiguracoesConfirmado",
             ["ACESSIBILIDADE VISUAL", "GRÁFICOS E DESEMPENHO", "GRAFICOS E DESEMPENHO"],
-            cancellationToken);
+            cancellationToken,
+            TimeSpan.FromSeconds(10));
+
+        await TapNavigationRepeatedAsync(GameKey.Up, 12, cancellationToken);
+        if (!await IsDifficultyCategoryFocusedAsync(cancellationToken))
+        {
+            throw await CreateDifficultyFailureAsync(
+                "SelecionarDificuldade",
+                "A categoria Dificuldade não ficou focada após a normalização no topo. Nenhum Enter foi enviado.");
+        }
 
         context.Logger.State(
             Workflow,
             "SelecionarDificuldade",
-            "Dificuldade é a primeira categoria e já vem selecionada; ativando o painel com Enter.");
+            "Categoria Dificuldade confirmada pela borda verde; ativando o painel com A.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
-        await context.Vision.WaitForAnyTextAsync(
-            Workflow,
-            "SelecionarDificuldadeConfirmado",
-            ["VOLTAR AO PADRÃO", "VOLTAR AO PADRAO"],
-            cancellationToken);
+        await WaitForDifficultyPanelAsync(cancellationToken);
         _difficultyRowIndex = 0;
     }
 
-    public async Task SetDifficultyOptionAsync(
+    private async Task ResetCampaignPauseFocusAsync(CancellationToken cancellationToken)
+    {
+        var confirmation = await ConfirmPauseTabAsync(cancellationToken);
+        if (confirmation.State == PauseTabState.Unknown || confirmation.ActiveTab is null)
+        {
+            throw await CreateDifficultyFailureAsync(
+                "IdentificarAbaCampanha",
+                "O menu da rua foi confirmado, mas a aba ativa não ficou inequívoca em duas de três capturas.");
+        }
+
+        var campaignInitiallyActive = string.Equals(
+            confirmation.ActiveTab,
+            "CAMPANHA",
+            StringComparison.Ordinal);
+        for (var move = 0;
+             !string.Equals(confirmation.ActiveTab, "CAMPANHA", StringComparison.Ordinal) &&
+             move < MaximumPauseTabMoves;
+             move++)
+        {
+            var activeIndex = Array.FindIndex(
+                PauseTabs,
+                tab => string.Equals(tab.Name, confirmation.ActiveTab, StringComparison.Ordinal));
+            if (activeIndex <= 0)
+            {
+                throw await CreateDifficultyFailureAsync(
+                    "DirecionarAbaCampanha",
+                    $"A aba ativa '{confirmation.ActiveTab}' não produziu uma direção segura até Campanha.");
+            }
+
+            context.Logger.State(
+                Workflow,
+                "AbrirAbaCampanha",
+                $"Aba {confirmation.ActiveTab} ativa; recuando um passo com LB/PgUp ({move + 1}/{MaximumPauseTabMoves}).");
+            await context.Input.HoldPreciselyAsync(
+                GameKey.PageUp,
+                PauseTabPulseMilliseconds,
+                cancellationToken);
+            await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
+            confirmation = await ConfirmPauseTabAsync(cancellationToken);
+            if (confirmation.State == PauseTabState.Unknown || confirmation.ActiveTab is null)
+            {
+                throw await CreateDifficultyFailureAsync(
+                    "AbrirAbaCampanha",
+                    "A transição por LB/PgUp não produziu uma aba ativa inequívoca; nenhum novo movimento foi enviado.");
+            }
+        }
+
+        if (!string.Equals(confirmation.ActiveTab, "CAMPANHA", StringComparison.Ordinal))
+        {
+            throw await CreateDifficultyFailureAsync(
+                "AbrirAbaCampanhaLimitado",
+                $"A aba Campanha não foi confirmada após {MaximumPauseTabMoves} movimentos limitados.");
+        }
+
+        if (campaignInitiallyActive)
+        {
+            context.Logger.State(
+                Workflow,
+                "NormalizarFocoCampanha",
+                "Campanha já estava ativa; fazendo uma reentrada confirmada RB→LB para restaurar o cartão inicial.");
+            await context.Input.HoldPreciselyAsync(
+                GameKey.PageDown,
+                PauseTabPulseMilliseconds,
+                cancellationToken);
+            await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
+            var cars = await ConfirmPauseTabAsync(cancellationToken);
+            if (cars.State == PauseTabState.Unknown ||
+                !string.Equals(cars.ActiveTab, "CARROS", StringComparison.Ordinal))
+            {
+                throw await CreateDifficultyFailureAsync(
+                    "SairCampanhaParaNormalizarFoco",
+                    $"A reentrada da aba Campanha não confirmou Carros após RB/PgDn " +
+                    $"(observada: {cars.ActiveTab ?? "indefinida"}).");
+            }
+
+            await context.Input.HoldPreciselyAsync(
+                GameKey.PageUp,
+                PauseTabPulseMilliseconds,
+                cancellationToken);
+            await Task.Delay(PauseTabSettleMilliseconds, cancellationToken);
+            var campaign = await ConfirmPauseTabAsync(cancellationToken);
+            if (campaign.State == PauseTabState.Unknown ||
+                !string.Equals(campaign.ActiveTab, "CAMPANHA", StringComparison.Ordinal))
+            {
+                throw await CreateDifficultyFailureAsync(
+                    "RetornarCampanhaParaNormalizarFoco",
+                    "A reentrada RB→LB não reconfirmou a aba Campanha em duas de três capturas.");
+            }
+        }
+
+        await WaitForCampaignMenuStructureAsync(cancellationToken);
+    }
+
+    private async Task WaitForCampaignMenuStructureAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            if (normalized.Contains("MAPA DO MUNDO", StringComparison.Ordinal) &&
+                normalized.Contains("CONFIGURACOES", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        throw await CreateDifficultyFailureAsync(
+            "ConfirmarEstruturaCampanha",
+            "A aba Campanha ficou ativa, mas Mapa do Mundo e Configurações não apareceram juntos no OCR.");
+    }
+
+    private async Task<RectangleF?> FindStreetSettingsCardRegionAsync(
+        CancellationToken cancellationToken)
+    {
+        var document = await context.Vision.ReadScreenAsync(cancellationToken);
+        var game = context.GameWindow.GetRequiredGameWindow();
+        var line = document.Lines
+            .Where(candidate =>
+                GameVisionService.Normalize(candidate.Text)
+                    .Contains("CONFIGURACOES", StringComparison.Ordinal))
+            .Where(candidate =>
+                candidate.Center.X >= game.ClientBounds.Width * 0.50 &&
+                candidate.Center.Y >= game.ClientBounds.Height * 0.35)
+            .OrderBy(candidate => candidate.Center.Y)
+            .FirstOrDefault();
+        if (line is null)
+        {
+            return null;
+        }
+
+        var left = Math.Clamp((float)(line.X / game.ClientBounds.Width) - 0.012f, 0f, 0.98f);
+        var top = Math.Clamp((float)(line.Y / game.ClientBounds.Height) - 0.035f, 0f, 0.96f);
+        var width = Math.Max(0.17f, (float)(line.Width / game.ClientBounds.Width) + 0.035f);
+        var height = 0.255f;
+        return new RectangleF(
+            left,
+            top,
+            Math.Min(width, 1f - left),
+            Math.Min(height, 1f - top));
+    }
+
+    private async Task<bool> IsDifficultyCategoryFocusedAsync(CancellationToken cancellationToken)
+    {
+        var document = await context.Vision.ReadScreenAsync(cancellationToken);
+        var game = context.GameWindow.GetRequiredGameWindow();
+        var line = document.Lines
+            .Where(candidate => string.Equals(
+                GameVisionService.Normalize(candidate.Text),
+                "DIFICULDADE",
+                StringComparison.Ordinal))
+            .Where(candidate =>
+                candidate.Center.X <= game.ClientBounds.Width * 0.30 &&
+                candidate.Center.Y <= game.ClientBounds.Height * 0.32)
+            .OrderByDescending(candidate => candidate.Center.Y)
+            .FirstOrDefault();
+        if (line is null)
+        {
+            return false;
+        }
+
+        var left = Math.Clamp((float)(line.X / game.ClientBounds.Width) - 0.012f, 0f, 0.98f);
+        var top = Math.Clamp((float)(line.Y / game.ClientBounds.Height) - 0.020f, 0f, 0.96f);
+        var width = Math.Max(0.21f, (float)(line.Width / game.ClientBounds.Width) + 0.045f);
+        var height = Math.Max(0.070f, (float)(line.Height / game.ClientBounds.Height) + 0.040f);
+        var region = new RectangleF(
+            left,
+            top,
+            Math.Min(width, 1f - left),
+            Math.Min(height, 1f - top));
+        return await HasStableLimeHorizontalOutlineAsync(
+            region,
+            minimumRatio: 0.70,
+            cancellationToken);
+    }
+
+    private async Task WaitForDifficultyPanelAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            if (normalized.Contains("DIFICULDADE DO DRIVATAR", StringComparison.Ordinal) &&
+                normalized.Contains("PREDEFINICAO DE ASSISTENCIA", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await Task.Delay(250, cancellationToken);
+        }
+
+        throw await CreateDifficultyFailureAsync(
+            "SelecionarDificuldadeConfirmado",
+            "O painel não confirmou simultaneamente Dificuldade do Drivatar e a predefinição de assistência.");
+    }
+
+    private async Task SetDifficultyOptionAsync(
         string rowLabel,
         string desiredValue,
-        GameKey direction,
+        IReadOnlyList<string> desiredAliases,
+        GameKey preferredDirection,
         int maximumSteps,
         CancellationToken cancellationToken)
     {
-        var desiredNormalized = GameVisionService.Normalize(desiredValue);
-        var screen = await context.Vision.ReadScreenAsync(cancellationToken);
-        if (GameVisionService.Normalize(screen.Text).Contains(desiredNormalized, StringComparison.Ordinal))
-        {
-            context.Logger.State(Workflow, "ConfigurarDificuldade", $"'{desiredValue}' já está aplicado.");
-            return;
-        }
-
         var rowIndex = GameVisionService.Normalize(rowLabel)
             .Contains("PREDEFINICAO DE ASSISTENCIA", StringComparison.Ordinal)
             ? 1
@@ -792,63 +1082,214 @@ public sealed class GameNavigator(AutomationContext context)
             _difficultyRowIndex--;
         }
 
-        for (var step = 1; step <= maximumSteps; step++)
+        if (await ObserveDifficultyValueAsync(desiredAliases, cancellationToken))
         {
-            await context.Input.TapAsync(direction, cancellationToken);
-            screen = await context.Vision.ReadScreenAsync(cancellationToken);
-            if (GameVisionService.Normalize(screen.Text).Contains(desiredNormalized, StringComparison.Ordinal))
+            context.Logger.State(Workflow, "ConfigurarDificuldade", $"'{desiredValue}' já está aplicado.");
+            return;
+        }
+
+        var directions = new[] { preferredDirection, OppositeHorizontalDirection(preferredDirection) };
+        var totalSteps = 0;
+        foreach (var direction in directions.Distinct())
+        {
+            for (var step = 1; step <= maximumSteps; step++)
             {
-                context.Logger.State(
-                    Workflow,
-                    "ConfigurarDificuldade",
-                    $"'{rowLabel}' definido como '{desiredValue}' em {step} ajuste(s).");
-                return;
+                await context.Input.TapAsync(direction, cancellationToken);
+                totalSteps++;
+                if (await ObserveDifficultyValueAsync(desiredAliases, cancellationToken))
+                {
+                    context.Logger.State(
+                        Workflow,
+                        "ConfigurarDificuldade",
+                        $"'{rowLabel}' definido como '{desiredValue}' em {totalSteps} ajuste(s) limitados.");
+                    return;
+                }
             }
         }
 
-        throw new CalibrationRequiredException(
-            $"Não foi possível definir '{rowLabel}' como '{desiredValue}' após {maximumSteps} passos.");
+        throw await CreateDifficultyFailureAsync(
+            "ConfigurarDificuldade",
+            $"Não foi possível definir '{rowLabel}' como '{desiredValue}' após " +
+            $"{maximumSteps} passos por direção. O farm não será iniciado.");
     }
 
-    public async Task SaveDifficultyAndReturnAsync(CancellationToken cancellationToken)
+    private async Task<bool> ObserveDifficultyValueAsync(
+        IReadOnlyList<string> desiredAliases,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            if (desiredAliases.Any(alias => normalized.Contains(alias, StringComparison.Ordinal)))
+            {
+                return true;
+            }
+
+            if (attempt == 0)
+            {
+                await Task.Delay(120, cancellationToken);
+            }
+        }
+
+        return false;
+    }
+
+    private async Task ConfirmDifficultyConfigurationAsync(
+        string assistanceLabel,
+        IReadOnlyList<string> assistanceAliases,
+        CancellationToken cancellationToken)
+    {
+        var confirmations = 0;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            var drivatarConfirmed = UnbeatableDrivatarAliases.Any(alias =>
+                normalized.Contains(alias, StringComparison.Ordinal));
+            var assistanceConfirmed = assistanceAliases.Any(alias =>
+                normalized.Contains(alias, StringComparison.Ordinal));
+            var panelConfirmed = normalized.Contains("DIFICULDADE DO DRIVATAR", StringComparison.Ordinal) &&
+                                 normalized.Contains("PREDEFINICAO DE ASSISTENCIA", StringComparison.Ordinal);
+            if (drivatarConfirmed && assistanceConfirmed && panelConfirmed)
+            {
+                confirmations++;
+            }
+
+            if (attempt < 2)
+            {
+                await Task.Delay(140, cancellationToken);
+            }
+        }
+
+        if (confirmations < 2)
+        {
+            throw await CreateDifficultyFailureAsync(
+                "ConfirmarDificuldade",
+                $"A combinação Imbatível + {assistanceLabel} não foi confirmada em duas de três capturas. " +
+                "O farm não será iniciado.");
+        }
+
+        context.Logger.State(
+            Workflow,
+            "DificuldadeConfirmada",
+            $"Dificuldade do Drivatar Imbatível e predefinição {assistanceLabel} confirmadas em duas de três capturas.");
+    }
+
+    private async Task SaveDifficultyAndReturnAsync(CancellationToken cancellationToken)
     {
         context.Logger.State(
             Workflow,
             "SalvarDificuldade",
-            "Saindo do painel com B; se houver alterações, confirmaremos 'Salvar e Continuar'.");
+            "Voltando com B; alterações serão confirmadas somente pela opção 'Salvar e Continuar'.");
         await context.Input.TapAsync(GameKey.Escape, cancellationToken);
 
-        var outcome = await context.Vision.WaitForAnyTextAsync(
-            Workflow,
-            "ConfirmarSalvarDificuldade",
-            [
-                "ALTERAÇÕES NÃO SALVAS",
-                "ALTERACOES NAO SALVAS",
-                "SALVAR E CONTINUAR",
-                "DIRIGIR",
-                "CONFIGURAÇÕES",
-                "DIÁRIO DE COLEÇÃO"
-            ],
-            cancellationToken,
-            TimeSpan.FromSeconds(8));
-
-        var normalizedOutcome = GameVisionService.Normalize(outcome.Line.Text);
-        if (normalizedOutcome.Contains("NAO SALVAS", StringComparison.Ordinal) ||
-            normalizedOutcome.Contains("SALVAR E CONTINUAR", StringComparison.Ordinal))
+        var difficultyBackAttempts = 1;
+        var settingsBackAttempts = 0;
+        var saveAttempts = 0;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (DateTime.UtcNow < deadline)
         {
-            context.Logger.State(
-                Workflow,
-                "ConfirmarSalvarDificuldade",
-                "Confirmando a opção selecionada 'Salvar e Continuar' com A.");
-            await context.Input.TapAsync(GameKey.Enter, cancellationToken);
+            var detected = await context.GameContext.DetectAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(detected.Document.Text);
+            if (detected.Kind == GameContextKind.StreetMenu || IsPauseMenuText(normalized))
+            {
+                context.Logger.State(
+                    Workflow,
+                    "RetornoMenuRua",
+                    "Configuração salva e menu da rua reconfirmado antes de iniciar o farm.");
+                return;
+            }
+
+            if (HasAny(normalized, "ALTERACOES NAO SALVAS", "SALVAR E CONTINUAR"))
+            {
+                if (!normalized.Contains("SALVAR E CONTINUAR", StringComparison.Ordinal))
+                {
+                    await Task.Delay(250, cancellationToken);
+                    continue;
+                }
+
+                if (saveAttempts >= 2)
+                {
+                    throw await CreateDifficultyFailureAsync(
+                        "ConfirmarSalvarDificuldade",
+                        "O diálogo de alterações permaneceu após duas confirmações limitadas.");
+                }
+
+                saveAttempts++;
+                context.Logger.State(
+                    Workflow,
+                    "ConfirmarSalvarDificuldade",
+                    $"Confirmando 'Salvar e Continuar' com A ({saveAttempts}/2).");
+                await context.Input.TapAsync(GameKey.Enter, cancellationToken);
+                await Task.Delay(900, cancellationToken);
+                continue;
+            }
+
+            if (normalized.Contains("DIFICULDADE DO DRIVATAR", StringComparison.Ordinal) &&
+                normalized.Contains("PREDEFINICAO DE ASSISTENCIA", StringComparison.Ordinal))
+            {
+                if (await IsDifficultyCategoryFocusedAsync(cancellationToken))
+                {
+                    if (settingsBackAttempts >= 2)
+                    {
+                        throw await CreateDifficultyFailureAsync(
+                            "SairConfiguracoes",
+                            "A categoria Dificuldade continuou aberta após duas saídas limitadas.");
+                    }
+
+                    settingsBackAttempts++;
+                    context.Logger.State(
+                        Workflow,
+                        "SairConfiguracoes",
+                        $"Foco retornou à lista de categorias; voltando ao menu da rua ({settingsBackAttempts}/2).");
+                    await context.Input.TapAsync(GameKey.Escape, cancellationToken);
+                    await Task.Delay(700, cancellationToken);
+                    continue;
+                }
+
+                if (difficultyBackAttempts >= 2)
+                {
+                    throw await CreateDifficultyFailureAsync(
+                        "SairPainelDificuldade",
+                        "O painel de valores permaneceu ativo após duas saídas limitadas.");
+                }
+
+                difficultyBackAttempts++;
+                context.Logger.State(
+                    Workflow,
+                    "SairPainelDificuldade",
+                    $"O primeiro B não devolveu o foco à categoria; repetindo uma vez ({difficultyBackAttempts}/2).");
+                await context.Input.TapAsync(GameKey.Escape, cancellationToken);
+                await Task.Delay(700, cancellationToken);
+                continue;
+            }
+
+            await Task.Delay(300, cancellationToken);
         }
 
-        await context.Vision.WaitForAnyTextAsync(
-            Workflow,
-            "RetornoGaragem",
-            ["DIRIGIR", "CONFIGURAÇÕES", "DIÁRIO DE COLEÇÃO"],
-            cancellationToken,
-            TimeSpan.FromSeconds(10));
+        throw await CreateDifficultyFailureAsync(
+            "RetornoMenuRua",
+            "Não foi possível reconfirmar o menu da rua após salvar a dificuldade.");
+    }
+
+    private static GameKey OppositeHorizontalDirection(GameKey direction) => direction switch
+    {
+        GameKey.Left => GameKey.Right,
+        GameKey.Right => GameKey.Left,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(direction),
+            direction,
+            "O ajuste de dificuldade aceita somente as direções esquerda e direita.")
+    };
+
+    private async Task<CalibrationRequiredException> CreateDifficultyFailureAsync(
+        string state,
+        string message)
+    {
+        using var frame = await context.Capture.CaptureAsync(CancellationToken.None);
+        var diagnostic = context.Capture.SaveDiagnostic(frame.Bitmap, Workflow, state);
+        return new CalibrationRequiredException($"{message} Diagnóstico local: {diagnostic}");
     }
 
     public async Task<MasterySnapshot> OpenMasteryAndReadAsync(
@@ -2185,6 +2626,31 @@ public sealed class GameNavigator(AutomationContext context)
                     region,
                     cancellationToken,
                     minimumRatio))
+            {
+                confirmations++;
+            }
+
+            if (attempt < 3)
+            {
+                await Task.Delay(120, cancellationToken);
+            }
+        }
+
+        return confirmations >= 2;
+    }
+
+    private async Task<bool> HasStableLimeHorizontalOutlineAsync(
+        RectangleF region,
+        double minimumRatio,
+        CancellationToken cancellationToken)
+    {
+        var confirmations = 0;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var ratio = await context.Vision.AnalyzeScreenAsync(
+                (bitmap, _) => LimeHorizontalBorderRatio(bitmap, region),
+                cancellationToken);
+            if (ratio >= minimumRatio)
             {
                 confirmations++;
             }

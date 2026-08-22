@@ -71,11 +71,17 @@ public sealed class FastMoneyWorkflow : IMacroWorkflow
 
         var carSelector = new RequiredCarSelector(context);
         await carSelector.EnsureSelectedAsync(RequiredCarDefinition.CrFarm, cancellationToken);
+        context.Telemetry.UpdateStage(
+            "Configurando dificuldade",
+            "Aplicando Drivatar Imbatível e a predefinição sem assistências antes do Farm de CR.");
+        await new GameNavigator(context).ConfigureDrivingDifficultyAsync(
+            DrivingAssistancePreset.NoAssists,
+            cancellationToken);
         context.Logger.State(
             Workflow,
             "CarroRequisito",
             "Nissan S-Cargo S1 800 confirmada antes da primeira tentativa. " +
-            "Dificuldade e assistências permanecem avisos de pré-requisito, sem leitura dinâmica.");
+            "Drivatar Imbatível e predefinição Extremo foram confirmados antes do evento.");
 
         var attemptNumber = 0;
         var consecutiveRecoveries = 0;

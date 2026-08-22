@@ -579,6 +579,74 @@
                         </RadioButton>
 
                         <RadioButton
+                            x:Name="RevueltoSpinMacro"
+                            AutomationProperties.HelpText="Seleciona a automação Farm de Spin com Lamborghini Revuelto"
+                            AutomationProperties.Name="Farm de Spin · Revuelto"
+                            Checked="Macro_Checked"
+                            GroupName="Macros"
+                            Style="{StaticResource BotSelectionCardStyle}"
+                            Tag="FarmarWheelspinsRevuelto">
+                            <Border x:Name="RevueltoSpinBotImageFrame" CornerRadius="13">
+                                <Grid>
+                                    <Image
+                                        x:Name="RevueltoSpinMacroImageGray"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Image
+                                        x:Name="RevueltoSpinMacroImageColor"
+                                        Opacity="0"
+                                        Source="ms-appx:///Assets/UI/WheelSpin.jpg"
+                                        Stretch="UniformToFill" />
+                                    <Border x:Name="RevueltoSpinMacroImageOverlay" Background="{ThemeResource BotImageTextOverlayBrush}" />
+                                    <Border
+                                        x:Name="RevueltoSpinMacroImageGlint"
+                                        Width="180"
+                                        Height="300"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Background="{StaticResource BotImageGlintBrush}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-22" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Grid Margin="16,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 04" />
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
+                                            <TextBlock
+                                                x:Name="RevueltoSpinCardTitleText"
+                                                Foreground="{ThemeResource BotCardForegroundBrush}"
+                                                FontSize="18"
+                                                FontWeight="SemiBold"
+                                                Text="Farm de Spin · Revuelto" />
+                                            <TextBlock
+                                                x:Name="RevueltoSpinCardDescriptionText"
+                                                Foreground="{ThemeResource BotCardMutedForegroundBrush}"
+                                                FontSize="12"
+                                                MaxLines="2"
+                                                Text="Compra o Revuelto, percorre a rota de 39 SP e prepara o próximo ciclo."
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <TextBlock
+                                            x:Name="RevueltoSpinCardResourceText"
+                                            Grid.Row="2"
+                                            Foreground="{ThemeResource BotCardAccentBrush}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Text="Recursos · 39 SP e 365.000 CR" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </RadioButton>
+
+                        <RadioButton
                             x:Name="SpendWheelspinMacro"
                             AutomationProperties.HelpText="Seleciona a automação para gastar Wheelspins"
                             AutomationProperties.Name="Gastar Wheelspins"
@@ -618,7 +686,7 @@
                                             <RowDefinition Height="*" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 04" />
+                                        <TextBlock Foreground="{ThemeResource BotCardMutedForegroundBrush}" FontSize="10" FontWeight="SemiBold" Text="AUTOMAÇÃO 05" />
                                         <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="3">
                                             <TextBlock
                                                 x:Name="SpendWheelspinCardTitleText"
@@ -782,7 +850,7 @@
                                             x:Name="ViGEmInfoBar"
                                             IsClosable="False"
                                             IsOpen="False"
-                                            Message="Farm de CR e segundo plano dependem do controle virtual."
+                                            Message="Alguns BOTs e o modo em segundo plano dependem do controle virtual."
                                             Severity="Warning"
                                             Title="ViGEmBus indisponível">
                                             <InfoBar.ActionButton>

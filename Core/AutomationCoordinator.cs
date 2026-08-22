@@ -322,7 +322,8 @@ public sealed class AutomationCoordinator : IAsyncDisposable
 
     private async Task RunNestedAsync(MacroRunRequest request, CancellationToken cancellationToken)
     {
-        if (_activeRootKind != MacroKind.FarmarWheelspins ||
+        if (_activeRootKind is not { } activeRootKind ||
+            !IsSpinFarmRoot(activeRootKind) ||
             request.Kind is not (MacroKind.FarmarSp or MacroKind.Farmar200kMin))
         {
             throw new AutomationFaultException(
@@ -456,7 +457,7 @@ public sealed class AutomationCoordinator : IAsyncDisposable
 
         if (removalConfirmations >= 2)
         {
-            if (rootKind == MacroKind.FarmarWheelspins)
+            if (IsSpinFarmRoot(rootKind))
             {
                 _logger.Info(
                     "Modal de remoção pendente entregue ao WheelSpin para cancelamento confirmado pela opção Não.");
@@ -556,6 +557,9 @@ public sealed class AutomationCoordinator : IAsyncDisposable
     }
 
     private static string DisplayName(MacroKind kind) => BotCatalog.Get(kind).Name;
+
+    private static bool IsSpinFarmRoot(MacroKind kind) =>
+        kind is MacroKind.FarmarWheelspins or MacroKind.FarmarWheelspinsRevuelto;
 
     private sealed record PendingDestructiveDialogProbe(
         bool HasPrompt,

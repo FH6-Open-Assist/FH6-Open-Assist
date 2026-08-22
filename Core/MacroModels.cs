@@ -5,7 +5,8 @@ public enum MacroKind
     FarmarSp,
     Farmar200kMin,
     FarmarWheelspins,
-    GastarWheelspins
+    GastarWheelspins,
+    FarmarWheelspinsRevuelto
 }
 
 public enum MacroRunState
