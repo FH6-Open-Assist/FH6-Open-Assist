@@ -778,6 +778,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             "Cartão veículo-alvo aberto; cada próximo A dependerá do estado visual estável da compra.");
 
         var purchaseCompleted = false;
+        var expectedPriceConfirmed = false;
         try
         {
             for (var step = 1; step <= 6; step++)
@@ -795,6 +796,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                         break;
 
                     case PurchaseScreenKind.PriceDetails:
+                        expectedPriceConfirmed = true;
                         context.Logger.State(
                             _profile.Workflow,
                             "ConfirmarPreco",
@@ -805,12 +807,25 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                         break;
 
                     case PurchaseScreenKind.PurchaseModal:
-                        await ConfirmPurchaseModalAsync(context, cancellationToken);
+                        if (!expectedPriceConfirmed)
+                        {
+                            throw await CreateFailureAsync(
+                                context,
+                                "ConfirmarCompraSemPrecoAnterior",
+                                "O modal de compra apareceu sem uma confirmação anterior do preço na faixa amarela; " +
+                                "nenhum Enter será enviado.");
+                        }
+
+                        await ConfirmPurchaseModalAsync(
+                            context,
+                            expectedPriceConfirmed,
+                            cancellationToken);
                         SavePurchaseAuthorizationCheckpoint(context);
                         context.Logger.State(
                             _profile.Workflow,
                             "ConfirmarCompra",
-                            "Prompt, preço e opção exata Comprar focada foram confirmados em duas de três capturas; " +
+                            "Preço confirmado na etapa anterior, e prompt com a opção exata Comprar focada " +
+                            "foram confirmados em duas de três capturas; " +
                             "a autorização foi persistida antes do A.");
                         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
 
@@ -1442,6 +1457,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
 
     private async Task ConfirmPurchaseModalAsync(
         AutomationContext context,
+        bool expectedPricePreviouslyConfirmed,
         CancellationToken cancellationToken)
     {
         var expectedCredits = _profile.GetSettings(context.Settings).CreditsPerCar;
@@ -1455,7 +1471,7 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                 {
                     var snapshot = AnalyzePurchaseScreen(bitmap, document, expectedCredits);
                     if (snapshot.Kind != PurchaseScreenKind.PurchaseModal ||
-                        !snapshot.HasExpectedPrice ||
+                        (!snapshot.HasExpectedPrice && !expectedPricePreviouslyConfirmed) ||
                         snapshot.PurchaseAction is null)
                     {
                         return new PurchaseModalCheck(false, 0, snapshot.Evidence);
@@ -1470,7 +1486,8 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
                     return new PurchaseModalCheck(
                         focusRatio >= 0.55,
                         focusRatio,
-                        $"{snapshot.Evidence}; foco bilateral={focusRatio:P2}");
+                        $"{snapshot.Evidence}; preço anterior confirmado={(expectedPricePreviouslyConfirmed ? "sim" : "não")}; " +
+                        $"foco bilateral={focusRatio:P2}");
                 },
                 cancellationToken);
             bestFocusRatio = Math.Max(bestFocusRatio, check.FocusRatio);
@@ -1491,8 +1508,9 @@ public sealed class SpinFarmWorkflow : IMacroWorkflow
             throw await CreateFailureAsync(
                 context,
                 "ConfirmarCompra",
-                $"O modal não confirmou em duas capturas o prompt de compra por {expectedCredits:N0} CR e a opção exata Comprar " +
-                $"com realce verde. Melhor foco={bestFocusRatio:P2}; última leitura={lastEvidence}.");
+                $"Após confirmar {expectedCredits:N0} CR na etapa anterior, o modal não confirmou em duas capturas " +
+                $"o prompt e a opção exata Comprar com realce verde. Melhor foco={bestFocusRatio:P2}; " +
+                $"última leitura={lastEvidence}.");
         }
     }
 
