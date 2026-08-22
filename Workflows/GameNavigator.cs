@@ -30,6 +30,9 @@ public sealed class GameNavigator(AutomationContext context)
     private const double TravelCardOutlineRatio = 0.78;
     private const double WelcomeContinueOutlineRatio = 0.80;
     private const double StreetSettingsLightSurfaceRatio = 0.70;
+    private const double PostEventMiniMapDarkRatio = 0.20;
+    private const double PostEventAnnaLinkLightRatio = 0.04;
+    private const double PostEventSpeedometerMagentaRatio = 0.001;
     private const int StreetSettingsOcrScale = 3;
     private const int MaximumDifficultyOptionMoves = 10;
     private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
@@ -41,6 +44,9 @@ public sealed class GameNavigator(AutomationContext context)
     private static readonly RectangleF StreetSettingsCardRegion = new(0.570f, 0.508f, 0.160f, 0.205f);
     private static readonly RectangleF StreetSettingsFocusRegion = new(0.565f, 0.495f, 0.170f, 0.225f);
     private static readonly RectangleF StreetSettingsInteriorRegion = new(0.585f, 0.535f, 0.130f, 0.155f);
+    private static readonly RectangleF PostEventMiniMapRegion = new(0.035f, 0.710f, 0.160f, 0.190f);
+    private static readonly RectangleF PostEventAnnaLinkRegion = new(0.045f, 0.910f, 0.120f, 0.070f);
+    private static readonly RectangleF PostEventSpeedometerRegion = new(0.840f, 0.680f, 0.155f, 0.300f);
     private static readonly string[] GameReadyAliases =
     [
         "DIRIGIR",
@@ -2507,11 +2513,20 @@ public sealed class GameNavigator(AutomationContext context)
             var normalized = GameVisionService.Normalize(state.Document.Text);
             var ratingVisible = HasAny(normalized, "AVALIAR DESAFIO", "QUER CURTIR ESTE DESAFIO");
             var houseEntranceVisible = HasAny(normalized, "ENTRAR NA CASA");
+            PostEventStreetHudObservation? streetHud = null;
+            if (!ratingVisible && state.Kind == GameContextKind.Unknown)
+            {
+                streetHud = await context.Vision.AnalyzeScreenAsync(
+                    AnalyzePostEventStreetHud,
+                    cancellationToken);
+            }
+
+            var streetHudVisible = streetHud?.Confirmed == true;
             var safeKind = state.Kind is GameContextKind.Street or GameContextKind.StreetMenu or
                            GameContextKind.EventMenu;
-            if (!ratingVisible && (safeKind || houseEntranceVisible))
+            if (!ratingVisible && (safeKind || houseEntranceVisible || streetHudVisible))
             {
-                var observedKind = houseEntranceVisible && state.Kind == GameContextKind.Unknown
+                var observedKind = (houseEntranceVisible || streetHudVisible) && state.Kind == GameContextKind.Unknown
                     ? GameContextKind.Street
                     : state.Kind;
                 if (safeSuccessorKind == observedKind)
@@ -2526,6 +2541,16 @@ public sealed class GameNavigator(AutomationContext context)
 
                 if (safeSuccessorFrames >= 2)
                 {
+                    if (streetHudVisible)
+                    {
+                        context.Logger.State(
+                            sourceWorkflow,
+                            "RuaConfirmadaAposAvaliacao",
+                            $"HUD de direção confirmada em dois frames: minimapa escuro={streetHud!.MiniMapDarkRatio:P1}, " +
+                            $"ANNA/LINK claro={streetHud.AnnaLinkLightRatio:P1}, " +
+                            $"velocímetro magenta={streetHud.SpeedometerMagentaRatio:P2}.");
+                    }
+
                     return true;
                 }
             }
@@ -2633,6 +2658,41 @@ public sealed class GameNavigator(AutomationContext context)
         }
 
         return new EventChallengeRatingObservation(true, focused, bestScore);
+    }
+
+    private static PostEventStreetHudObservation AnalyzePostEventStreetHud(
+        Bitmap bitmap,
+        OcrDocument document)
+    {
+        var normalized = GameVisionService.Normalize(document.Text);
+        var conflictingState = HasAny(
+            normalized,
+            "AVALIAR DESAFIO",
+            "QUER CURTIR ESTE DESAFIO",
+            "CURTIR",
+            "NAO GOSTEI",
+            "CANCELAR",
+            "CONTINUAR",
+            "CONFIRMAR",
+            "TENTAR NOVAMENTE",
+            "TEMPO RESTANTE",
+            "ATUAL",
+            "MAPA DO MUNDO",
+            "MEU HORIZON",
+            "COMPRAR E VENDER",
+            "CONTROLE DESCONECTADO");
+        var miniMapDarkRatio = ColorRatio(bitmap, PostEventMiniMapRegion, IsDarkNeutral);
+        var annaLinkLightRatio = ColorRatio(bitmap, PostEventAnnaLinkRegion, IsLightNeutral);
+        var speedometerMagentaRatio = ColorRatio(bitmap, PostEventSpeedometerRegion, IsMagentaAccent);
+        var confirmed = !conflictingState &&
+                        miniMapDarkRatio >= PostEventMiniMapDarkRatio &&
+                        annaLinkLightRatio >= PostEventAnnaLinkLightRatio &&
+                        speedometerMagentaRatio >= PostEventSpeedometerMagentaRatio;
+        return new PostEventStreetHudObservation(
+            confirmed,
+            miniMapDarkRatio,
+            annaLinkLightRatio,
+            speedometerMagentaRatio);
     }
 
     private async Task<GameContextResult> DetectContextMenuWithConsensusAsync(
@@ -3748,6 +3808,49 @@ public sealed class GameNavigator(AutomationContext context)
         return sampled == 0 ? 0 : matching / (double)sampled;
     }
 
+    private static double ColorRatio(
+        Bitmap bitmap,
+        RectangleF normalizedRegion,
+        Func<Color, bool> predicate)
+    {
+        var region = ToPixelRegion(bitmap, normalizedRegion);
+        var matching = 0;
+        var sampled = 0;
+        for (var y = region.Top; y < region.Bottom; y += 2)
+        {
+            for (var x = region.Left; x < region.Right; x += 2)
+            {
+                sampled++;
+                if (predicate(bitmap.GetPixel(x, y)))
+                {
+                    matching++;
+                }
+            }
+        }
+
+        return sampled == 0 ? 0 : matching / (double)sampled;
+    }
+
+    private static bool IsDarkNeutral(Color color)
+    {
+        var maximum = Math.Max(color.R, Math.Max(color.G, color.B));
+        var minimum = Math.Min(color.R, Math.Min(color.G, color.B));
+        return maximum <= 75 && maximum - minimum <= 35;
+    }
+
+    private static bool IsLightNeutral(Color color)
+    {
+        var maximum = Math.Max(color.R, Math.Max(color.G, color.B));
+        var minimum = Math.Min(color.R, Math.Min(color.G, color.B));
+        return minimum >= 180 && maximum - minimum <= 45;
+    }
+
+    private static bool IsMagentaAccent(Color color) =>
+        color.R >= 160 &&
+        color.B >= 80 &&
+        color.R >= color.G * 1.5 &&
+        color.B >= color.G * 1.2;
+
     private static Rectangle ToPixelRegion(Bitmap bitmap, RectangleF normalizedRegion)
     {
         var left = Math.Clamp((int)Math.Round(bitmap.Width * normalizedRegion.Left), 0, bitmap.Width - 1);
@@ -4107,6 +4210,12 @@ public sealed class GameNavigator(AutomationContext context)
         bool DialogVisible,
         EventChallengeRatingOption FocusedOption,
         double FocusScore);
+
+    private sealed record PostEventStreetHudObservation(
+        bool Confirmed,
+        double MiniMapDarkRatio,
+        double AnnaLinkLightRatio,
+        double SpeedometerMagentaRatio);
 
     private enum GarageMenuObservationKind
     {
