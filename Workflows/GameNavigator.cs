@@ -39,6 +39,7 @@ public sealed class GameNavigator(AutomationContext context)
     private static readonly RectangleF MasterySkillPointsRegion = new(0.155f, 0.842f, 0.229f, 0.050f);
     private static readonly RectangleF WelcomeContinueRegion = new(0.024f, 0.771f, 0.211f, 0.058f);
     private static readonly RectangleF StreetSettingsCardRegion = new(0.570f, 0.508f, 0.160f, 0.205f);
+    private static readonly RectangleF StreetSettingsFocusRegion = new(0.565f, 0.495f, 0.170f, 0.225f);
     private static readonly RectangleF StreetSettingsInteriorRegion = new(0.585f, 0.535f, 0.130f, 0.155f);
     private static readonly string[] GameReadyAliases =
     [
@@ -787,7 +788,7 @@ public sealed class GameNavigator(AutomationContext context)
         }
 
         await ResetCampaignPauseFocusAsync(cancellationToken);
-        var settingsRegion = StreetSettingsCardRegion;
+        var settingsRegion = StreetSettingsFocusRegion;
 
         var settingsFocused = await HasStableLimeHorizontalOutlineAsync(
             settingsRegion,
