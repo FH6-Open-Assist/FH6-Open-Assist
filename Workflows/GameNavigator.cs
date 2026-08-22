@@ -31,6 +31,8 @@ public sealed class GameNavigator(AutomationContext context)
     private const double WelcomeContinueOutlineRatio = 0.80;
     private const double StreetSettingsLightSurfaceRatio = 0.70;
     private const int StreetSettingsOcrScale = 3;
+    private const int DifficultyCategoryNormalizationMoves = 12;
+    private const int DifficultyCategoryNavigationDelayMilliseconds = 300;
     private const int MaximumDifficultyOptionMoves = 10;
     private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
     private static readonly RectangleF TravelYesRegion = new(0.318f, 0.508f, 0.360f, 0.064f);
@@ -824,14 +826,20 @@ public sealed class GameNavigator(AutomationContext context)
             "AbrirConfiguracoes",
             "Cartão Configurações confirmado no contexto da Campanha e pela borda verde; abrindo com A.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
-        await context.Vision.WaitForAnyTextAsync(
-            Workflow,
-            "AbrirConfiguracoesConfirmado",
-            ["ACESSIBILIDADE VISUAL", "GRÁFICOS E DESEMPENHO", "GRAFICOS E DESEMPENHO"],
-            cancellationToken,
-            TimeSpan.FromSeconds(10));
+        await WaitForSettingsCategoriesAsync(cancellationToken);
 
-        await TapNavigationRepeatedAsync(GameKey.Up, 12, cancellationToken);
+        context.Logger.State(
+            Workflow,
+            "NormalizarCategoriaDificuldade",
+            "Lista de categorias estável em duas leituras; normalizando o foco no topo com cadência própria do menu Configurações.");
+        for (var move = 0; move < DifficultyCategoryNormalizationMoves; move++)
+        {
+            await context.Input.TapAsync(
+                GameKey.Up,
+                cancellationToken,
+                postDelayMs: DifficultyCategoryNavigationDelayMilliseconds);
+        }
+
         if (!await IsDifficultyCategoryFocusedAsync(cancellationToken))
         {
             throw await CreateDifficultyFailureAsync(
@@ -846,6 +854,36 @@ public sealed class GameNavigator(AutomationContext context)
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await WaitForDifficultyPanelAsync(cancellationToken);
         _difficultyRowIndex = 0;
+    }
+
+    private async Task WaitForSettingsCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var consecutive = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            var document = await context.Vision.ReadScreenAsync(cancellationToken);
+            var normalized = GameVisionService.Normalize(document.Text);
+            var complete = normalized.Contains("DIFICULDADE", StringComparison.Ordinal) &&
+                           normalized.Contains("ACESSIBILIDADE VISUAL", StringComparison.Ordinal) &&
+                           normalized.Contains("EXTRAS", StringComparison.Ordinal);
+            consecutive = complete ? consecutive + 1 : 0;
+            if (consecutive >= 2)
+            {
+                await Task.Delay(600, cancellationToken);
+                context.Logger.State(
+                    Workflow,
+                    "AbrirConfiguracoesConfirmado",
+                    "Lista completa de categorias confirmada em duas leituras consecutivas e estabilizada para navegação.");
+                return;
+            }
+
+            await Task.Delay(220, cancellationToken);
+        }
+
+        throw await CreateDifficultyFailureAsync(
+            "AbrirConfiguracoesConfirmado",
+            "Configurações abriu, mas Dificuldade, Acessibilidade Visual e Extras não ficaram visíveis juntos em duas leituras.");
     }
 
     private async Task ResetCampaignPauseFocusAsync(CancellationToken cancellationToken)
