@@ -60,8 +60,9 @@ jobs:
 
           $notesPath = Join-Path $outputDirectory "virustotal-release-notes.md"
           $notes = [System.IO.File]::ReadAllText($notesPath, $utf8)
-          if (-not $notes.Contains("Verificação no VirusTotal") -or
+          $expectedHeading = "Verifica$([char]0x00E7)$([char]0x00E3)o no VirusTotal"
+          if (-not $notes.Contains($expectedHeading) -or
               -not $notes.Contains("<!-- virustotal:start -->") -or
               -not $notes.Contains("<!-- virustotal:end -->")) {
-            throw "Notas sintéticas do VirusTotal inválidas."
+            throw "Notas sinteticas do VirusTotal invalidas."
           }
