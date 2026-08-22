@@ -39,7 +39,36 @@ jobs:
         shell: powershell
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: .\scripts\build-release.ps1 -Version $env:RELEASE_TAG -OutputDirectory .\artifacts\release
+          CODE_SIGNING_CERTIFICATE_BASE64: ${{ secrets.CODE_SIGNING_CERTIFICATE_BASE64 }}
+          FH6_CODE_SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificateConfigured = -not [string]::IsNullOrWhiteSpace($env:CODE_SIGNING_CERTIFICATE_BASE64)
+          $passwordConfigured = -not [string]::IsNullOrWhiteSpace($env:FH6_CODE_SIGNING_PASSWORD)
+          if ($certificateConfigured -ne $passwordConfigured) {
+            throw "Configure juntos os secrets CODE_SIGNING_CERTIFICATE_BASE64 e CODE_SIGNING_CERTIFICATE_PASSWORD."
+          }
+
+          $parameters = @{
+            Version = $env:RELEASE_TAG
+            OutputDirectory = ".\artifacts\release"
+          }
+          $certificatePath = $null
+          try {
+            if ($certificateConfigured) {
+              $certificatePath = Join-Path $env:RUNNER_TEMP "fh6-open-assist-code-signing.pfx"
+              [System.IO.File]::WriteAllBytes(
+                $certificatePath,
+                [Convert]::FromBase64String($env:CODE_SIGNING_CERTIFICATE_BASE64))
+              $parameters.SigningCertificatePath = $certificatePath
+            }
+
+            .\scripts\build-release.ps1 @parameters
+          }
+          finally {
+            if ($null -ne $certificatePath -and (Test-Path -LiteralPath $certificatePath)) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
 
       - name: Analisar artefatos no VirusTotal
         shell: powershell
