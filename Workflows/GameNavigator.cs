@@ -29,6 +29,8 @@ public sealed class GameNavigator(AutomationContext context)
     private const double PauseTabUnderlineLimeRatio = 0.60;
     private const double TravelCardOutlineRatio = 0.78;
     private const double WelcomeContinueOutlineRatio = 0.80;
+    private const double StreetSettingsLightSurfaceRatio = 0.70;
+    private const int StreetSettingsOcrScale = 3;
     private const int MaximumDifficultyOptionMoves = 10;
     private static readonly RectangleF TravelCardRegion = new(0.265f, 0.220f, 0.470f, 0.310f);
     private static readonly RectangleF TravelYesRegion = new(0.318f, 0.508f, 0.360f, 0.064f);
@@ -36,6 +38,8 @@ public sealed class GameNavigator(AutomationContext context)
     private static readonly RectangleF EventExitYesRegion = new(0.32f, 0.51f, 0.36f, 0.06f);
     private static readonly RectangleF MasterySkillPointsRegion = new(0.155f, 0.842f, 0.229f, 0.050f);
     private static readonly RectangleF WelcomeContinueRegion = new(0.024f, 0.771f, 0.211f, 0.058f);
+    private static readonly RectangleF StreetSettingsCardRegion = new(0.570f, 0.508f, 0.160f, 0.205f);
+    private static readonly RectangleF StreetSettingsInteriorRegion = new(0.585f, 0.535f, 0.130f, 0.155f);
     private static readonly string[] GameReadyAliases =
     [
         "DIRIGIR",
@@ -783,10 +787,7 @@ public sealed class GameNavigator(AutomationContext context)
         }
 
         await ResetCampaignPauseFocusAsync(cancellationToken);
-        var settingsRegion = await FindStreetSettingsCardRegionAsync(cancellationToken)
-                             ?? throw await CreateDifficultyFailureAsync(
-                                 "LocalizarConfiguracoes",
-                                 "O cartão Configurações não foi localizado no menu Campanha da rua.");
+        var settingsRegion = StreetSettingsCardRegion;
 
         var settingsFocused = await HasStableLimeHorizontalOutlineAsync(
             settingsRegion,
@@ -830,7 +831,7 @@ public sealed class GameNavigator(AutomationContext context)
         context.Logger.State(
             Workflow,
             "AbrirConfiguracoes",
-            "Cartão Configurações confirmado por texto e borda verde; abrindo com A.");
+            "Cartão Configurações confirmado no contexto da Campanha e pela borda verde; abrindo com A.");
         await context.Input.TapAsync(GameKey.Enter, cancellationToken);
         await context.Vision.WaitForAnyTextAsync(
             Workflow,
@@ -952,52 +953,65 @@ public sealed class GameNavigator(AutomationContext context)
     private async Task WaitForCampaignMenuStructureAsync(CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        var recent = new Queue<CampaignSettingsObservation>(3);
+        CampaignSettingsObservation? lastObservation = null;
         while (DateTime.UtcNow < deadline)
         {
-            var document = await context.Vision.ReadScreenAsync(cancellationToken);
-            var normalized = GameVisionService.Normalize(document.Text);
-            if (normalized.Contains("MAPA DO MUNDO", StringComparison.Ordinal) &&
-                normalized.Contains("CONFIGURACOES", StringComparison.Ordinal))
+            lastObservation = await context.Vision.AnalyzeScreenWithScaledRegionsAsync(
+                [StreetSettingsCardRegion],
+                StreetSettingsOcrScale,
+                AnalyzeCampaignSettingsCard,
+                cancellationToken);
+            EnqueueBounded(recent, lastObservation, 3);
+            if (recent.Count == 3 &&
+                recent.Count(observation => observation.Confirmed) >= 2 &&
+                recent.Last().Confirmed)
             {
+                context.Logger.State(
+                    Workflow,
+                    "ConfirmarEstruturaCampanha",
+                    $"Cartão Configurações confirmado sem analisar o fundo dinâmico do Mapa: " +
+                    $"OCR regional={(lastObservation.TextVisible ? "sim" : "não")}, " +
+                    $"superfície clara={lastObservation.LightSurfaceRatio:P1}.");
                 return;
             }
 
-            await Task.Delay(250, cancellationToken);
+            await Task.Delay(180, cancellationToken);
+        }
+
+        var observedText = lastObservation?.OcrText ?? string.Empty;
+        if (observedText.Length > 120)
+        {
+            observedText = observedText[..120] + "…";
         }
 
         throw await CreateDifficultyFailureAsync(
             "ConfirmarEstruturaCampanha",
-            "A aba Campanha ficou ativa, mas Mapa do Mundo e Configurações não apareceram juntos no OCR.");
+            "A aba Campanha ficou ativa, mas o cartão Configurações não foi confirmado em duas de três capturas " +
+            $"por OCR regional ou pela superfície clara esperada. Último OCR regional: '{observedText}'; " +
+            $"superfície clara={lastObservation?.LightSurfaceRatio:P1}. O fundo variável do Mapa não foi analisado.");
     }
 
-    private async Task<RectangleF?> FindStreetSettingsCardRegionAsync(
-        CancellationToken cancellationToken)
+    private static CampaignSettingsObservation AnalyzeCampaignSettingsCard(
+        Bitmap bitmap,
+        OcrDocument _,
+        IReadOnlyList<OcrDocument> scaledRegions)
     {
-        var document = await context.Vision.ReadScreenAsync(cancellationToken);
-        var game = context.GameWindow.GetRequiredGameWindow();
-        var line = document.Lines
-            .Where(candidate =>
-                GameVisionService.Normalize(candidate.Text)
-                    .Contains("CONFIGURACOES", StringComparison.Ordinal))
-            .Where(candidate =>
-                candidate.Center.X >= game.ClientBounds.Width * 0.50 &&
-                candidate.Center.Y >= game.ClientBounds.Height * 0.35)
-            .OrderBy(candidate => candidate.Center.Y)
-            .FirstOrDefault();
-        if (line is null)
+        if (scaledRegions.Count != 1)
         {
-            return null;
+            throw new ArgumentException(
+                "A confirmação do cartão Configurações exige uma região OCR dedicada.",
+                nameof(scaledRegions));
         }
 
-        var left = Math.Clamp((float)(line.X / game.ClientBounds.Width) - 0.012f, 0f, 0.98f);
-        var top = Math.Clamp((float)(line.Y / game.ClientBounds.Height) - 0.035f, 0f, 0.96f);
-        var width = Math.Max(0.17f, (float)(line.Width / game.ClientBounds.Width) + 0.035f);
-        var height = 0.255f;
-        return new RectangleF(
-            left,
-            top,
-            Math.Min(width, 1f - left),
-            Math.Min(height, 1f - top));
+        var normalized = GameVisionService.Normalize(scaledRegions[0].Text);
+        var textVisible = normalized.Contains("CONFIGURACOES", StringComparison.Ordinal);
+        var lightSurfaceRatio = LightNeutralSurfaceRatio(bitmap, StreetSettingsInteriorRegion);
+        return new CampaignSettingsObservation(
+            textVisible || lightSurfaceRatio >= StreetSettingsLightSurfaceRatio,
+            textVisible,
+            lightSurfaceRatio,
+            normalized);
     }
 
     private async Task<bool> IsDifficultyCategoryFocusedAsync(CancellationToken cancellationToken)
@@ -3657,6 +3671,31 @@ public sealed class GameNavigator(AutomationContext context)
         return Math.Min(bestAbove, bestBelow);
     }
 
+    private static double LightNeutralSurfaceRatio(Bitmap bitmap, RectangleF normalizedRegion)
+    {
+        var region = ToPixelRegion(bitmap, normalizedRegion);
+        var matching = 0;
+        var sampled = 0;
+        for (var y = region.Top; y < region.Bottom; y += 2)
+        {
+            for (var x = region.Left; x < region.Right; x += 2)
+            {
+                var color = bitmap.GetPixel(x, y);
+                sampled++;
+                if (color.R >= 185 &&
+                    color.G >= 185 &&
+                    color.B >= 185 &&
+                    Math.Max(color.R, Math.Max(color.G, color.B)) -
+                    Math.Min(color.R, Math.Min(color.G, color.B)) <= 35)
+                {
+                    matching++;
+                }
+            }
+        }
+
+        return sampled == 0 ? 0 : matching / (double)sampled;
+    }
+
     private static Rectangle ToPixelRegion(Bitmap bitmap, RectangleF normalizedRegion)
     {
         var left = Math.Clamp((int)Math.Round(bitmap.Width * normalizedRegion.Left), 0, bitmap.Width - 1);
@@ -3990,6 +4029,12 @@ public sealed class GameNavigator(AutomationContext context)
         double OutlineRatio,
         double CenterX,
         double CenterY,
+        string OcrText);
+
+    private sealed record CampaignSettingsObservation(
+        bool Confirmed,
+        bool TextVisible,
+        double LightSurfaceRatio,
         string OcrText);
 
     private sealed record TravelConfirmationObservation(bool DialogVisible, double YesLimeRatio);
