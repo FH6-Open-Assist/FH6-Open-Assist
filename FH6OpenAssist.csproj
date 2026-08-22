@@ -11,6 +11,7 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <UseSystemDrawing>true</UseSystemDrawing>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\UI\fh6-open-assist.ico</ApplicationIcon>
     <AssemblyName>FH6OpenAssist</AssemblyName>
     <RootNamespace>FH6OpenAssist</RootNamespace>
     <Product>FH6 Open Assist</Product>
@@ -43,5 +44,19 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
+
+  <Target Name="CopyWinUiResourcesToPublishDirectory" AfterTargets="Publish">
+    <ItemGroup>
+      <_WinUiPublishResource Include="$(OutputPath)**\*.xbf" />
+      <_WinUiPublishResource Include="$(OutputPath)$(AssemblyName).pri"
+                             Condition="Exists('$(OutputPath)$(AssemblyName).pri')" />
+    </ItemGroup>
+
+    <Error Condition="'@(_WinUiPublishResource)' == ''"
+           Text="O publish WinUI não encontrou os recursos XBF/PRI compilados." />
+    <Copy SourceFiles="@(_WinUiPublishResource)"
+          DestinationFiles="@(_WinUiPublishResource->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

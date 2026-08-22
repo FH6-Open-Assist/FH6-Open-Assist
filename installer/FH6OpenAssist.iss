@@ -36,6 +36,7 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 LicenseFile=..\LICENSE
+SetupIconFile=..\Assets\UI\fh6-open-assist.ico
 UninstallDisplayIcon={app}\{#AppExecutable}
 VersionInfoCompany=FH6 Open Assist
 VersionInfoDescription=Instalador do FH6 Open Assist
