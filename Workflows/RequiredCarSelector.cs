@@ -135,6 +135,7 @@ public sealed class RequiredCarSelector(AutomationContext context)
     // saldo de CR no canto direito (por exemplo, "CR 31.560.033") produza um
     // falso PI como "R315" e conflite com o S1 800 real da Nissan.
     private static readonly RectangleF HeaderRegion = new(0.03f, 0.01f, 0.50f, 0.18f);
+    private static readonly RectangleF FullScreenRegion = new(0, 0, 1, 1);
     private static readonly RectangleF CampaignTabRegion = new(0.24f, 0.185f, 0.09f, 0.04f);
     private static readonly RectangleF CarsTabRegion = new(0.33f, 0.185f, 0.075f, 0.04f);
     private static readonly RectangleF CampaignPanelRegion = new(0.24f, 0.22f, 0.50f, 0.58f);
@@ -202,6 +203,8 @@ public sealed class RequiredCarSelector(AutomationContext context)
 
     private async Task EnsureStreetMenuOpenAsync(CancellationToken cancellationToken)
     {
+        await WaitForStreetLoadingAsync(cancellationToken);
+
         var unknownProbeUsed = false;
         var houseMovementRecoveryUsed = false;
         var persistentHouseProbeUsed = false;
@@ -335,6 +338,60 @@ public sealed class RequiredCarSelector(AutomationContext context)
         throw await CreateFailureAsync(
             "PrepararMenuRua",
             "Não foi possível confirmar o menu da rua após quatro sondas limitadas.");
+    }
+
+    private async Task WaitForStreetLoadingAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(2);
+        var loadingObserved = false;
+        var readyFrames = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            var observation = await context.Vision.AnalyzeScreenAsync(
+                (bitmap, document) => new
+                {
+                    DarkRatio = DarkFillRatio(bitmap, FullScreenRegion),
+                    HasText = !string.IsNullOrWhiteSpace(GameVisionService.Normalize(document.Text))
+                },
+                cancellationToken);
+            var isLoading = observation.DarkRatio >= 0.97 && !observation.HasText;
+            if (!isLoading)
+            {
+                if (!loadingObserved)
+                {
+                    return;
+                }
+
+                readyFrames++;
+                if (readyFrames >= 2)
+                {
+                    context.Logger.State(
+                        Workflow,
+                        "CarregamentoRuaConcluido",
+                        "A transição preta terminou em duas capturas consecutivas; retomando a validação da rua sem reutilizar a sonda de menu.");
+                    return;
+                }
+            }
+            else
+            {
+                if (!loadingObserved)
+                {
+                    context.Logger.State(
+                        Workflow,
+                        "AguardarCarregamentoRua",
+                        "Transição preta de carregamento confirmada; aguardando passivamente antes de autorizar qualquer sonda de menu.");
+                }
+
+                loadingObserved = true;
+                readyFrames = 0;
+            }
+
+            await Task.Delay(1_000, cancellationToken);
+        }
+
+        throw await CreateFailureAsync(
+            "PrepararMenuRua",
+            "A transição preta de carregamento não terminou dentro do limite passivo de dois minutos; nenhuma sonda de menu foi enviada.");
     }
 
     private async Task<CurrentCarObservation> ReadCurrentCarAsync(
