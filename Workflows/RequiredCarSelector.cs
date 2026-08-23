@@ -131,6 +131,7 @@ public sealed class RequiredCarSelector(AutomationContext context)
     private const string Workflow = "Seleção de carro";
     private const int MaximumManufacturerSteps = 48;
     private const int MaximumCarColumns = 64;
+    private const int StreetReadyFramesAfterLoading = 8;
     // O cabeçalho do carro fica no lado esquerdo. Limitar a ROI evita que o
     // saldo de CR no canto direito (por exemplo, "CR 31.560.033") produza um
     // falso PI como "R315" e conflite com o S1 800 real da Nissan.
@@ -363,12 +364,13 @@ public sealed class RequiredCarSelector(AutomationContext context)
                 }
 
                 readyFrames++;
-                if (readyFrames >= 2)
+                if (readyFrames >= StreetReadyFramesAfterLoading)
                 {
                     context.Logger.State(
                         Workflow,
                         "CarregamentoRuaConcluido",
-                        "A transição preta terminou em duas capturas consecutivas; retomando a validação da rua sem reutilizar a sonda de menu.");
+                        "A transição preta terminou e a rua permaneceu visível por oito capturas consecutivas; " +
+                        "a vinheta pós-carregamento estabilizou passivamente antes da única sonda de menu.");
                     return;
                 }
             }
