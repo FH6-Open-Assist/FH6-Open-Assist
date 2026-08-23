@@ -158,3 +158,43 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Não foi possível publicar os artefatos na GitHub Release."
           }
+
+      - name: Baixar branch dos badges
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: badges
+          path: .release-badges
+
+      - name: Publicar badges do VirusTotal
+        shell: powershell
+        run: |
+          $badgeCheckout = ".\.release-badges"
+          Copy-Item `
+            -LiteralPath ".\artifacts\release\virustotal-portable.json" `
+            -Destination (Join-Path $badgeCheckout "virustotal-portable.json") `
+            -Force
+          Copy-Item `
+            -LiteralPath ".\artifacts\release\virustotal-setup.json" `
+            -Destination (Join-Path $badgeCheckout "virustotal-setup.json") `
+            -Force
+
+          git -C $badgeCheckout config user.name "github-actions[bot]"
+          git -C $badgeCheckout config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C $badgeCheckout add -- virustotal-portable.json virustotal-setup.json
+
+          $changes = @(git -C $badgeCheckout status --porcelain)
+          if ($changes.Count -eq 0) {
+            Write-Host "Os badges do VirusTotal já correspondem à release atual."
+            exit 0
+          }
+
+          git -C $badgeCheckout commit `
+            -m "chore: atualizar badges do VirusTotal para $env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível registrar a atualização dos badges do VirusTotal."
+          }
+
+          git -C $badgeCheckout push origin HEAD:badges
+          if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível publicar os badges do VirusTotal."
+          }

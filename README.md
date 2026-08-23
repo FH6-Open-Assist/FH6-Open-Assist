@@ -4,8 +4,8 @@
 ![Windows 10 e 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4.svg)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)
 ![WinUI 3](https://img.shields.io/badge/interface-WinUI%203-0078D4.svg)
-[![VirusTotal · Portable](https://img.shields.io/endpoint?url=https%3A%2F%2Fgithub.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Freleases%2Flatest%2Fdownload%2Fvirustotal-portable.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
-[![VirusTotal · Setup](https://img.shields.io/endpoint?url=https%3A%2F%2Fgithub.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Freleases%2Flatest%2Fdownload%2Fvirustotal-setup.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
+[![VirusTotal · Portable](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Fbadges%2Fvirustotal-portable.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
+[![VirusTotal · Setup](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFH6-Open-Assist%2FFH6-Open-Assist%2Fbadges%2Fvirustotal-setup.json&cacheSeconds=3600)](https://github.com/FH6-Open-Assist/FH6-Open-Assist/releases/latest)
 
 Assistente de automação de código aberto para **Forza Horizon 6**, feito em WinUI 3 para reduzir tarefas repetitivas no Windows com verificações visuais e paradas seguras.
 
