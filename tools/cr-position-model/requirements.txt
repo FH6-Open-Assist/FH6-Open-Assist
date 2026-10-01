@@ -3,4 +3,4 @@ numpy==2.5.2
 Pillow==12.3.0
 onnx==1.22.0
 onnxscript==0.7.1
-onnxruntime==1.29.0
+onnxruntime==1.30.0
